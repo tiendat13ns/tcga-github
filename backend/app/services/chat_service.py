@@ -264,7 +264,7 @@ async def _agent_response(request: ChatRequest) -> str:
     )
     history.append(HumanMessage(content=request.message + context_instruction))
 
-    agent = get_chat_agent()
+    agent = get_chat_agent(request.user_id)
     result = await agent.ainvoke({"messages": history})
     messages = result.get("messages", [])
 
@@ -421,7 +421,7 @@ async def stream_chat_message(request: ChatRequest):
             )
             history.append(HumanMessage(content=request.message + context_instruction))
 
-            agent = get_chat_agent()
+            agent = get_chat_agent(request.user_id)
             # Buffer text tự thuật của agent thay vì đẩy thẳng lên UI. Agent (ReAct) hay tự thuật
             # kế hoạch giữa các bước ("Lấy danh sách requirements trước...", "tiến hành tạo test
             # case...") — đây là suy nghĩ nội bộ, KHÔNG nên hiện cho user; nếu đẩy ngay còn bị khối

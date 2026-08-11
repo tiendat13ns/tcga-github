@@ -44,6 +44,12 @@ services:
       # Bind mount trên Windows/Docker Desktop không forward inotify events đầy đủ,
       # nên phải bật polling để uvicorn --reload phát hiện thay đổi file.
       - WATCHFILES_FORCE_POLLING=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 #     environment:
 #       # Ghi đè DATABASE_URL để trỏ tới service "db" thay vì localhost
 #       - DATABASE_URL=postgresql://postgres:password@db:5432/postgres
@@ -68,7 +74,8 @@ services:
       # Ngăn không cho host ghi đè node_modules trong container
       - /app/node_modules
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 # ============================================
 # 💾  VOLUMES - Nơi lưu dữ liệu

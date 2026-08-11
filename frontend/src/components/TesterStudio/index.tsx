@@ -8,6 +8,7 @@ import { downloadWithAuth } from "../../lib/api";
 import BugReportDrawer from "./BugReportDrawer";
 import ProjectSelectionView from "./ProjectSelectionView";
 import ProjectWorkspaceView from "./ProjectWorkspaceView";
+import TestCaseFormDrawer from "./TestCaseFormDrawer";
 import TestCaseTableView from "./TestCaseTableView";
 import { CheckIcon, DEFAULT_BUG_REPORT_FIELDS, computeExecutionSummary, parseBugReport, serializeBugReport } from "./shared";
 import type { BugReportFields, StudioTestCaseItem, StudioView } from "./shared";
@@ -29,11 +30,6 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
   const [filterPriority, setFilterPriority] = useState("");
   const [filterTestType, setFilterTestType] = useState("");
 
-  // Editing — scoped theo từng nhóm requirement (chỉ 1 nhóm được sửa tại 1 thời điểm).
-  const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
-  const [draftTestCases, setDraftTestCases] = useState<Record<string, Partial<StudioTestCaseItem>>>({});
-  const [isBulkSaving, setIsBulkSaving] = useState(false);
-
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -42,6 +38,10 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
   const [addingGroupKey, setAddingGroupKey] = useState<string | null>(null);
   const [addingRequirementId, setAddingRequirementId] = useState<string | null>(null);
   const [newRowDraft, setNewRowDraft] = useState<Partial<StudioTestCaseItem>>({ priority: "Medium", status: "draft", execution_status: "Untested", execution_type: "Manual" });
+
+  // Edit 1 test case — mở drawer sửa riêng dòng đó (thay cho sửa hàng loạt trực tiếp trong bảng).
+  const [editingTc, setEditingTc] = useState<StudioTestCaseItem | null>(null);
+  const [editDraft, setEditDraft] = useState<Partial<StudioTestCaseItem>>({});
 
   // Bug Report Drawer
   const [bugReportTc, setBugReportTc] = useState<StudioTestCaseItem | null>(null);
@@ -180,9 +180,8 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
     setSelectedDocument(doc);
     setFilterPriority("");
     setFilterTestType("");
-    setEditingGroupKey(null);
     setAddingGroupKey(null);
-    setDraftTestCases({});
+    setEditingTc(null);
     setView("testcases");
   };
 
@@ -194,31 +193,18 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
 
   const goBackToDocuments = () => {
     setSelectedDocument(null);
-    setEditingGroupKey(null);
     setAddingGroupKey(null);
-    setDraftTestCases({});
+    setEditingTc(null);
     setView("documents");
   };
 
-  /* ── Bulk Editing ── */
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const startGroupEditing = (groupKey: string) => {
-    setAddingGroupKey(null);        // không sửa và thêm cùng lúc
-    setEditingGroupKey(groupKey);
-    setDraftTestCases({});
-  };
-
-  const cancelGroupEditing = () => {
-    setEditingGroupKey(null);
-    setDraftTestCases({});
-  };
-
   const startAddRow = (groupKey: string, requirementId: string) => {
-    setEditingGroupKey(null);       // không sửa và thêm cùng lúc
+    setEditingTc(null);             // không sửa và thêm cùng lúc
     setAddingGroupKey(groupKey);
     setAddingRequirementId(requirementId);
     setNewRowDraft({ priority: "Medium", status: "draft", execution_status: "Untested", execution_type: "Manual" });
@@ -228,35 +214,47 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
     setAddingGroupKey(null);
   };
 
-  const handleDraftChange = (id: string, field: keyof StudioTestCaseItem, value: any) => {
-    setDraftTestCases(prev => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] || {}),
-        [field]: value
-      }
-    }));
+  /* ── Edit 1 Test Case (Drawer) ── */
+  const openEditDrawer = (tc: StudioTestCaseItem) => {
+    setAddingGroupKey(null);        // không sửa và thêm cùng lúc
+    setEditingTc(tc);
+    setEditDraft({
+      title: tc.title,
+      preconditions: tc.preconditions,
+      test_steps: tc.test_steps,
+      test_data: tc.test_data,
+      expected_result: tc.expected_result,
+      priority: tc.priority,
+    });
   };
 
-  const saveBulkEditing = async () => {
-    const modifiedIds = Object.keys(draftTestCases);
-    if (modifiedIds.length === 0) {
-      setEditingGroupKey(null);
+  const closeEditDrawer = () => {
+    setEditingTc(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTc) return;
+    if (!editDraft.title) {
+      alert("Title is required");
       return;
     }
 
-    setIsBulkSaving(true);
     try {
-      await Promise.all(
-        modifiedIds.map(id => updateTestCase.mutateAsync({ id, data: draftTestCases[id] }))
-      );
-      showToast("Bulk update successful!");
-      setEditingGroupKey(null);
-      setDraftTestCases({});
+      await updateTestCase.mutateAsync({
+        id: editingTc.id,
+        data: {
+          title: editDraft.title,
+          preconditions: editDraft.preconditions,
+          test_steps: editDraft.test_steps,
+          test_data: editDraft.test_data,
+          expected_result: editDraft.expected_result,
+          priority: editDraft.priority,
+        },
+      });
+      showToast("Test case updated successfully!");
+      setEditingTc(null);
     } catch (e) {
-      alert("Failed to save some test cases.");
-    } finally {
-      setIsBulkSaving(false);
+      alert("Failed to update test case");
     }
   };
 
@@ -387,20 +385,9 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
           onFilterPriorityChange={setFilterPriority}
           filterTestType={filterTestType}
           onFilterTestTypeChange={setFilterTestType}
-          editingGroupKey={editingGroupKey}
-          draftTestCases={draftTestCases}
-          isBulkSaving={isBulkSaving}
-          onStartGroupEditing={startGroupEditing}
-          onCancelGroupEditing={cancelGroupEditing}
-          onSaveBulkEditing={saveBulkEditing}
-          onDraftChange={handleDraftChange}
           addingGroupKey={addingGroupKey}
           onAddRowClick={startAddRow}
-          onCancelAddRow={cancelAddRow}
-          newRowDraft={newRowDraft}
-          onNewRowDraftChange={setNewRowDraft}
-          onAddNewRow={handleAddNewRow}
-          isCreatingRow={createTestCase.isPending}
+          onEditRow={openEditDrawer}
           onExecutionStatusChange={handleExecutionStatusChange}
           onOpenBugReportDrawer={openBugReportDrawer}
           onGoBackToProjects={goBackToProjects}
@@ -420,6 +407,26 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
         onFieldsChange={setBugReportFields}
         onClose={() => setBugReportTc(null)}
         onSave={handleSaveBugReport}
+        isSaving={updateTestCase.isPending}
+      />
+
+      <TestCaseFormDrawer
+        isOpen={!!addingGroupKey}
+        title="Thêm Test Case"
+        draft={newRowDraft}
+        onDraftChange={setNewRowDraft}
+        onClose={cancelAddRow}
+        onSave={handleAddNewRow}
+        isSaving={createTestCase.isPending}
+      />
+
+      <TestCaseFormDrawer
+        isOpen={!!editingTc}
+        title="Sửa Test Case"
+        draft={editDraft}
+        onDraftChange={setEditDraft}
+        onClose={closeEditDrawer}
+        onSave={handleSaveEdit}
         isSaving={updateTestCase.isPending}
       />
     </div>

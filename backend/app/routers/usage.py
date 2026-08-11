@@ -48,7 +48,7 @@ def get_usage_summary(
                 "name": "Free Plan",
                 "status": "active",
                 "price_vnd": 0,
-                "credits_per_month": 300,
+                "credits_per_month": 200,
                 "max_documents": 5,
                 "max_projects": 3,
                 "storage_mb": 50,

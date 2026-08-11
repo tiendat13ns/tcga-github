@@ -6,7 +6,7 @@ const PLANS = [
     name: "Free Plan",
     status: "active" as const,
     priceVnd: 0,
-    creditsPerMonth: 300,
+    creditsPerMonth: 200,
     maxDocuments: 5,
     maxProjects: 3,
     storageMb: 50,

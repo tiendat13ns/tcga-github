@@ -20,7 +20,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Tôi có thể chỉnh sửa Test Case sau khi AI sinh ra không?",
-    a: "Có. Test Case Studio cho phép chỉnh sửa từng dòng hoặc chỉnh sửa hàng loạt (Bulk Edit) như một bảng dữ liệu, kèm bộ lọc theo Priority, Status, Type.",
+    a: "Có. Test Case Studio cho phép chỉnh sửa từng dòng ngay trên bảng dữ liệu, kèm bộ lọc theo Priority, Status, Type.",
   },
   {
     q: "Credit là gì và dùng hết thì sao?",

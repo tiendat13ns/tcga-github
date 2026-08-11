@@ -11,7 +11,7 @@ export default function LandingCta({ isAuthenticated, onPrimaryCta }: LandingCta
           Sẵn sàng rút ngắn thời gian viết Requirement và Test Case?
         </h2>
         <p className="landing-cta-subtitle">
-          Bắt đầu miễn phí với 300 Credits — không cần thẻ thanh toán.
+          Bắt đầu miễn phí với 200 Credits — không cần thẻ thanh toán.
         </p>
         <button className="btn btn-primary landing-cta-btn" onClick={onPrimaryCta}>
           {isAuthenticated ? "Vào Dashboard" : "Dùng thử miễn phí"}

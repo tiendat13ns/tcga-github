@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.auth import get_current_user
+from app.models import User
 from app.schemas.ai_schema import AIHealthResponse, AITestRequest, AITestResponse
 from app.services.ai.base_provider import AIProviderError
 from app.services.ai.provider import AIProviderFactory
@@ -17,7 +19,13 @@ async def ai_health_check():
 
 
 @router.post("/test", response_model=AITestResponse)
-async def test_ai_provider(payload: AITestRequest):
+async def test_ai_provider(
+    payload: AITestRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Endpoint test/debug gọi thẳng AI provider — trước đây không auth, cho phép bất kỳ
+    ai gọi miễn phí (tốn API cost thật, không qua credit). Bắt buộc đăng nhập để chặn
+    lạm dụng; không trừ credit vì đây là công cụ debug nội bộ, không phải tính năng chính."""
     if not payload.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt is required")
 

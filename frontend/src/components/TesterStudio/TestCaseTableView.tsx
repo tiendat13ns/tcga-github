@@ -3,8 +3,8 @@ import { Sparkles, ChevronDown, Search, X } from "lucide-react";
 import { Project } from "../Projects/ProjectManager";
 import { DocumentItem } from "../../App";
 import {
-  ArrowLeftIcon, AlertCircleIcon, CheckIcon, ChevronRightIcon, DownloadIcon,
-  EditIcon, ExecutionSummaryBar, FlaskIcon, PriorityBadge, SpinnerIcon, XIcon,
+  ArrowLeftIcon, AlertCircleIcon, ChevronRightIcon, DownloadIcon,
+  EditIcon, ExecutionSummaryBar, FlaskIcon, PriorityBadge,
   computeExecutionSummary,
 } from "./shared";
 import type { ExecutionSummary, StudioTestCaseItem } from "./shared";
@@ -23,21 +23,9 @@ type TestCaseTableViewProps = {
   filterTestType: string;
   onFilterTestTypeChange: (v: string) => void;
 
-  editingGroupKey: string | null;
-  draftTestCases: Record<string, Partial<StudioTestCaseItem>>;
-  isBulkSaving: boolean;
-  onStartGroupEditing: (groupKey: string) => void;
-  onCancelGroupEditing: () => void;
-  onSaveBulkEditing: () => void;
-  onDraftChange: (id: string, field: keyof StudioTestCaseItem, value: any) => void;
-
   addingGroupKey: string | null;
   onAddRowClick: (groupKey: string, requirementId: string) => void;
-  onCancelAddRow: () => void;
-  newRowDraft: Partial<StudioTestCaseItem>;
-  onNewRowDraftChange: (draft: Partial<StudioTestCaseItem>) => void;
-  onAddNewRow: () => void;
-  isCreatingRow: boolean;
+  onEditRow: (tc: StudioTestCaseItem) => void;
 
   onExecutionStatusChange: (tc: StudioTestCaseItem, newStatus: string) => void;
   onOpenBugReportDrawer: (tc: StudioTestCaseItem) => void;
@@ -58,20 +46,9 @@ export default function TestCaseTableView({
   onFilterPriorityChange,
   filterTestType,
   onFilterTestTypeChange,
-  editingGroupKey,
-  draftTestCases,
-  isBulkSaving,
-  onStartGroupEditing,
-  onCancelGroupEditing,
-  onSaveBulkEditing,
-  onDraftChange,
   addingGroupKey,
   onAddRowClick,
-  onCancelAddRow,
-  newRowDraft,
-  onNewRowDraftChange,
-  onAddNewRow,
-  isCreatingRow,
+  onEditRow,
   onExecutionStatusChange,
   onOpenBugReportDrawer,
   onGoBackToProjects,
@@ -126,15 +103,12 @@ export default function TestCaseTableView({
 
   // Render 1 dòng test case. displayIdx = số thứ tự TC trong NHÓM (TC-01, TC-02... theo
   // từng requirement) — dễ đọc hơn đánh số chạy suốt cả file.
-  const renderRow = (tc: StudioTestCaseItem, displayIdx: number, editing: boolean) => {
-    const draft = draftTestCases[tc.id] || {};
-    const currentTC = { ...tc, ...draft };
-
+  const renderRow = (tc: StudioTestCaseItem, displayIdx: number) => {
     return (
-      <tr key={tc.id} className={editing ? "tcs-row-editing" : ""}>
+      <tr key={tc.id}>
         <td>
-          <div title={currentTC.feature_name || currentTC.module_name || currentTC.requirement_title || "-"}>
-            {currentTC.feature_name || currentTC.module_name || currentTC.requirement_title || "-"}
+          <div title={tc.feature_name || tc.module_name || tc.requirement_title || "-"}>
+            {tc.feature_name || tc.module_name || tc.requirement_title || "-"}
           </div>
         </td>
         <td>
@@ -144,68 +118,35 @@ export default function TestCaseTableView({
         </td>
 
         {/* Title */}
-        <td>
-          {editing ? (
-            <textarea className="tcs-cell-seamless" value={currentTC.title || ""} rows={2}
-              onChange={e => onDraftChange(tc.id, "title", e.target.value)} />
-          ) : <span style={{ fontWeight: 500 }}>{currentTC.title}</span>}
-        </td>
+        <td><span style={{ fontWeight: 500 }}>{tc.title}</span></td>
 
         {/* Preconditions */}
-        <td>
-          {editing ? (
-            <textarea className="tcs-cell-seamless" value={currentTC.preconditions || ""} rows={2}
-              onChange={e => onDraftChange(tc.id, "preconditions", e.target.value)} />
-          ) : currentTC.preconditions || <span style={{ color: "var(--text-muted)" }}>-</span>}
-        </td>
+        <td>{tc.preconditions || <span style={{ color: "var(--text-muted)" }}>-</span>}</td>
 
         {/* Test Steps */}
         <td>
-          {editing ? (
-            <textarea className="tcs-cell-seamless" value={(currentTC.test_steps || []).join("\n")} rows={4}
-              onChange={e => onDraftChange(tc.id, "test_steps", e.target.value.split("\n"))}
-              placeholder="One step per line" />
-          ) : (currentTC.test_steps && currentTC.test_steps.length > 0) ? (
+          {(tc.test_steps && tc.test_steps.length > 0) ? (
             <ol style={{ margin: 0, paddingLeft: "16px" }}>
-              {currentTC.test_steps.map((s: string, si: number) => <li key={si}>{s}</li>)}
+              {tc.test_steps.map((s: string, si: number) => <li key={si}>{s}</li>)}
             </ol>
           ) : <span style={{ color: "var(--text-muted)" }}>-</span>}
         </td>
 
         {/* Test Data */}
-        <td>
-          {editing ? (
-            <textarea className="tcs-cell-seamless" value={currentTC.test_data || ""} rows={2}
-              onChange={e => onDraftChange(tc.id, "test_data", e.target.value)} />
-          ) : currentTC.test_data || <span style={{ color: "var(--text-muted)" }}>-</span>}
-        </td>
+        <td>{tc.test_data || <span style={{ color: "var(--text-muted)" }}>-</span>}</td>
 
         {/* Expected Result */}
-        <td>
-          {editing ? (
-            <textarea className="tcs-cell-seamless" value={currentTC.expected_result || ""} rows={2}
-              onChange={e => onDraftChange(tc.id, "expected_result", e.target.value)} />
-          ) : currentTC.expected_result || <span style={{ color: "var(--text-muted)" }}>-</span>}
-        </td>
+        <td>{tc.expected_result || <span style={{ color: "var(--text-muted)" }}>-</span>}</td>
 
         {/* Priority */}
-        <td>
-          {editing ? (
-            <select className="tcs-cell-seamless tcs-cell-seamless-select" value={currentTC.priority || "Medium"}
-              onChange={e => onDraftChange(tc.id, "priority", e.target.value)}>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          ) : <PriorityBadge priority={currentTC.priority} />}
-        </td>
+        <td><PriorityBadge priority={tc.priority} /></td>
 
         {/* Execution */}
         <td>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <select
               className="tcs-dropdown"
-              value={currentTC.execution_status || "Untested"}
+              value={tc.execution_status || "Untested"}
               onChange={(e) => onExecutionStatusChange(tc, e.target.value)}
               style={{
                 fontWeight: 600,
@@ -214,9 +155,9 @@ export default function TestCaseTableView({
                 border: "1px solid var(--border)",
                 background: "var(--bg)",
                 cursor: "pointer",
-                color: currentTC.execution_status === "Pass" ? "var(--success)" :
-                       currentTC.execution_status === "Fail" ? "var(--danger)" :
-                       currentTC.execution_status === "Blocked" ? "var(--warning)" : "var(--text-muted)"
+                color: tc.execution_status === "Pass" ? "var(--success)" :
+                       tc.execution_status === "Fail" ? "var(--danger)" :
+                       tc.execution_status === "Blocked" ? "var(--warning)" : "var(--text-muted)"
               }}
             >
               <option value="Untested">Untested</option>
@@ -224,9 +165,9 @@ export default function TestCaseTableView({
               <option value="Fail">Fail</option>
               <option value="Blocked">Blocked</option>
             </select>
-            {currentTC.execution_status === "Fail" && (
+            {tc.execution_status === "Fail" && (
               <button
-                onClick={() => onOpenBugReportDrawer(currentTC as StudioTestCaseItem)}
+                onClick={() => onOpenBugReportDrawer(tc)}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: "26px", height: "26px", borderRadius: "6px",
@@ -244,62 +185,20 @@ export default function TestCaseTableView({
 
         {/* Note */}
         <td>
-          {editing ? (
-            <textarea className="tcs-cell-seamless" value={currentTC.note || ""} rows={2}
-              onChange={e => onDraftChange(tc.id, "note", e.target.value)}
-              placeholder="Add a note..." />
-          ) : (
-            <span style={{ fontSize: "12px", color: currentTC.note ? "var(--text-secondary)" : "var(--text-muted)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-              {currentTC.note || "—"}
-            </span>
-          )}
+          <span style={{ fontSize: "12px", color: tc.note ? "var(--text-secondary)" : "var(--text-muted)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {tc.note || "—"}
+          </span>
+        </td>
+
+        {/* Actions — icon Sửa chỉ hiện khi hover dòng, mở TestCaseFormDrawer để sửa riêng dòng này. */}
+        <td>
+          <button className="tcs-edit-hint" onClick={() => onEditRow(tc)} title="Sửa test case">
+            <EditIcon />
+          </button>
         </td>
       </tr>
     );
   };
-
-  // Form thêm test case thủ công — render bên trong nhóm requirement đang được thêm.
-  const renderAddRow = () => (
-    <tr key="__add_row__" className="tcs-row-editing" style={{ background: "color-mix(in srgb, var(--accent) 5%, transparent)" }}>
-      <td><div style={{ color: "var(--text-muted)", fontSize: "12px" }}>- Auto -</div></td>
-      <td><div style={{ color: "var(--text-muted)", fontSize: "12px" }}>- New -</div></td>
-      <td>
-        <textarea className="tcs-cell-seamless" placeholder="Title" value={newRowDraft.title || ""}
-          onChange={e => onNewRowDraftChange({ ...newRowDraft, title: e.target.value })} rows={2} />
-      </td>
-      <td>
-        <textarea className="tcs-cell-seamless" placeholder="Preconditions" value={newRowDraft.preconditions || ""}
-          onChange={e => onNewRowDraftChange({ ...newRowDraft, preconditions: e.target.value })} rows={2} />
-      </td>
-      <td>
-        <textarea className="tcs-cell-seamless" placeholder="One step per line" value={(newRowDraft.test_steps || []).join("\n")}
-          onChange={e => onNewRowDraftChange({ ...newRowDraft, test_steps: e.target.value.split("\n") })} rows={4} />
-      </td>
-      <td>
-        <textarea className="tcs-cell-seamless" placeholder="Data" value={newRowDraft.test_data || ""}
-          onChange={e => onNewRowDraftChange({ ...newRowDraft, test_data: e.target.value })} rows={2} />
-      </td>
-      <td>
-        <textarea className="tcs-cell-seamless" placeholder="Expected Result" value={newRowDraft.expected_result || ""}
-          onChange={e => onNewRowDraftChange({ ...newRowDraft, expected_result: e.target.value })} rows={2} />
-      </td>
-      <td>
-        <select className="tcs-cell-seamless tcs-cell-seamless-select" value={newRowDraft.priority || "Medium"}
-          onChange={e => onNewRowDraftChange({ ...newRowDraft, priority: e.target.value })}>
-          <option value="High">High</option>
-          <option value="Medium">Medium</option>
-          <option value="Low">Low</option>
-        </select>
-      </td>
-      <td>-</td>
-      <td>
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <button className="btn btn-primary" style={{ padding: "4px 8px", fontSize: "11px" }} onClick={onAddNewRow} disabled={isCreatingRow}>Save</button>
-          <button className="btn btn-secondary" style={{ padding: "4px 8px", fontSize: "11px" }} onClick={onCancelAddRow}>Cancel</button>
-        </div>
-      </td>
-    </tr>
-  );
 
   return (
     <div className="tcs-view">
@@ -419,30 +318,30 @@ export default function TestCaseTableView({
                 <tr>
                   <th className="tcs-sticky-header" style={{ width: "9%" }}>Feature</th>
                   <th className="tcs-sticky-header" style={{ width: "5%" }}>TC ID</th>
-                  <th className="tcs-sticky-header" style={{ width: "13%" }}>Title</th>
+                  <th className="tcs-sticky-header" style={{ width: "12%" }}>Title</th>
                   <th className="tcs-sticky-header" style={{ width: "11%" }}>Preconditions</th>
-                  <th className="tcs-sticky-header" style={{ width: "16%" }}>Test Steps</th>
+                  <th className="tcs-sticky-header" style={{ width: "15%" }}>Test Steps</th>
                   <th className="tcs-sticky-header" style={{ width: "9%" }}>Test Data</th>
-                  <th className="tcs-sticky-header" style={{ width: "12%" }}>Expected Result</th>
+                  <th className="tcs-sticky-header" style={{ width: "11%" }}>Expected Result</th>
                   <th className="tcs-sticky-header" style={{ width: "6%" }}>Priority</th>
                   <th className="tcs-sticky-header" style={{ width: "10%" }}>Execution</th>
-                  <th className="tcs-sticky-header" style={{ width: "9%" }}>Note</th>
+                  <th className="tcs-sticky-header" style={{ width: "8%" }}>Note</th>
+                  <th className="tcs-sticky-header" style={{ width: "4%" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCount === 0 ? (
                   <tr>
-                    <td colSpan={10} style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: "13px" }}>
+                    <td colSpan={11} style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: "13px" }}>
                       {search ? `Không tìm thấy test case khớp "${search}".` : "Không có test case."}
                     </td>
                   </tr>
                 ) : (
                   groups.map((g) => {
                     const summary = computeExecutionSummary(g.items);
-                    const isEditingThisGroup = editingGroupKey === g.key;
                     const isAddingThisGroup = addingGroupKey === g.key;
-                    // Nhóm đang sửa/thêm luôn được mở để thao tác.
-                    const isCollapsed = collapsedGroups.has(g.key) && !isEditingThisGroup && !isAddingThisGroup;
+                    // Nhóm đang thêm luôn được mở để thao tác.
+                    const isCollapsed = collapsedGroups.has(g.key) && !isAddingThisGroup;
                     const groupReqId = g.items[0]?.requirement_id;
                     return (
                       <Fragment key={g.key}>
@@ -451,7 +350,7 @@ export default function TestCaseTableView({
                           {/* Sticky ngay dưới thead (top ≈ chiều cao header cột) để khi cuộn qua
                               các test case dài, người dùng luôn thấy đang ở nhóm requirement nào.
                               z-index < thead (10) để nhãn cột vẫn nằm trên; > dòng dữ liệu để che chúng. */}
-                          <td colSpan={10} style={{ background: "var(--accent-dim)", borderTop: "2px solid var(--border)", padding: "9px 14px", position: "sticky", top: "34px", zIndex: 9 }}>
+                          <td colSpan={11} style={{ background: "var(--accent-dim)", borderTop: "2px solid var(--border)", padding: "9px 14px", position: "sticky", top: "34px", zIndex: 9 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                               <ChevronDown size={15} strokeWidth={2}
                                 style={{ transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", flexShrink: 0, color: "var(--text-secondary)" }} />
@@ -479,33 +378,16 @@ export default function TestCaseTableView({
                               </span>
                               {/* Nút thao tác theo nhóm — stopPropagation để bấm không làm gập/mở nhóm. */}
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }} onClick={(e) => e.stopPropagation()}>
-                                {isEditingThisGroup ? (
-                                  <>
-                                    <button className="btn btn-primary" style={{ padding: "4px 10px", fontSize: "11px", gap: "4px" }} onClick={onSaveBulkEditing} disabled={isBulkSaving}>
-                                      {isBulkSaving ? <SpinnerIcon /> : <CheckIcon />} {isBulkSaving ? "Đang lưu..." : "Lưu"}
-                                    </button>
-                                    <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "11px", gap: "4px" }} onClick={onCancelGroupEditing} disabled={isBulkSaving}>
-                                      <XIcon /> Huỷ
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    {groupReqId && (
-                                      <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "11px", gap: "4px" }} onClick={() => onAddRowClick(g.key, groupReqId)}>
-                                        + Thêm
-                                      </button>
-                                    )}
-                                    <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "11px", gap: "4px" }} onClick={() => onStartGroupEditing(g.key)}>
-                                      <EditIcon /> Sửa
-                                    </button>
-                                  </>
+                                {groupReqId && (
+                                  <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "11px", gap: "4px" }} onClick={() => onAddRowClick(g.key, groupReqId)}>
+                                    + Thêm
+                                  </button>
                                 )}
                               </div>
                             </div>
                           </td>
                         </tr>
-                        {!isCollapsed && g.items.map((tc, i) => renderRow(tc, i + 1, isEditingThisGroup))}
-                        {isAddingThisGroup && renderAddRow()}
+                        {!isCollapsed && g.items.map((tc, i) => renderRow(tc, i + 1))}
                       </Fragment>
                     );
                   })
@@ -515,30 +397,6 @@ export default function TestCaseTableView({
           </div>
         )}
       </div>
-
-      {/* Floating Edit Bar (always visible at bottom when editing) */}
-      {editingGroupKey !== null && (
-        <div className="tcs-edit-floating-bar">
-          <div className="tcs-edit-floating-left">
-            <div className="tcs-edit-banner-dot" />
-            <span style={{ fontWeight: 600, fontSize: "13px" }}>Editing</span>
-            <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>
-              {Object.keys(draftTestCases).length > 0
-                ? `${Object.keys(draftTestCases).length} modified`
-                : "No changes yet"}
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button className="tcs-edit-btn-cancel" onClick={onCancelGroupEditing} disabled={isBulkSaving}>
-              <XIcon /> Discard
-            </button>
-            <button className="tcs-edit-btn-save" onClick={onSaveBulkEditing} disabled={isBulkSaving}>
-              {isBulkSaving ? <SpinnerIcon /> : <CheckIcon />}
-              {isBulkSaving ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

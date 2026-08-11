@@ -17,7 +17,7 @@ const ROLES = [
     description: "Có ngay bộ Test Case Blackbox đầy đủ, không cần thiết kế từ đầu.",
     points: [
       "Bao phủ Positive, Negative, Boundary chuẩn 7 cột QA",
-      "Chỉnh sửa hàng loạt trong Test Case Studio",
+      "Chỉnh sửa nhanh từng Test Case trong Test Case Studio",
       "Export Excel chuẩn để bàn giao báo cáo ngay",
     ],
   },

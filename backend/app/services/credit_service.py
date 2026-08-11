@@ -1,11 +1,12 @@
 """
 Credit Service — quản lý trừ credit và kiểm tra quota cho từng gói dịch vụ.
 
-Chi phí theo tác vụ:
-  DOCUMENT_INGESTION      : 2 Credits  (~50đ API cost)
-  COPILOT_CHAT            : 2 Credits  (~10đ API cost)
-  REQUIREMENT_EXTRACTION  : 5 Credits  (~35đ API cost)
-  TEST_CASE_GENERATION    : 10 Credits (~40đ API cost)
+Chi phí theo tác vụ (đã cập nhật theo model occ/claude-sonnet-4-6 qua Vilao —
+input 1.500đ/1M token, output 7.500đ/1M token, min 10đ/request):
+  DOCUMENT_INGESTION      : 2 Credits  (~5đ API cost — chỉ embedding, không qua Sonnet)
+  COPILOT_CHAT            : 10 Credits (~50đ API cost)
+  REQUIREMENT_EXTRACTION  : 17 Credits (~120đ API cost)
+  TEST_CASE_GENERATION    : 50 Credits (~200đ API cost)
 
 Giới hạn FREE Plan:
   - Tối đa 5 tài liệu (documents)
@@ -27,9 +28,9 @@ logger = logging.getLogger(__name__)
 # ── Bảng định giá Credit ──────────────────────────────────────────────────────
 CREDIT_COST = {
     "DOCUMENT_INGESTION": 2,
-    "COPILOT_CHAT": 2,
-    "REQUIREMENT_EXTRACTION": 5,
-    "TEST_CASE_GENERATION": 10,
+    "COPILOT_CHAT": 10,
+    "REQUIREMENT_EXTRACTION": 17,
+    "TEST_CASE_GENERATION": 50,
 }
 
 # ── Quota theo từng gói (khớp ngưỡng credit dùng để xác định plan ở frontend) ──

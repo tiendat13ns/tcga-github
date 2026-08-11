@@ -174,10 +174,25 @@ def delete_project(
     db: Session = Depends(get_db),
 ):
     """Xóa project và toàn bộ dữ liệu liên quan (documents, chunks, requirements, test cases).
-    Hành động này không thể hoàn tác. Chỉ chủ sở hữu mới có quyền xóa."""
+    Hành động này không thể hoàn tác. Chỉ chủ sở hữu mới có quyền xóa.
+
+    Tự dọn test_case → requirement → document theo đúng thứ tự trước khi xoá project,
+    vì Requirement.document_id và TestCase.requirement_id KHÔNG có ondelete=CASCADE
+    (chỉ Requirement.project_id có SET NULL) — nếu chỉ db.delete(project) suông, Postgres
+    sẽ chặn lại với IntegrityError ngay khi project có tài liệu đã sinh requirement."""
     project = _get_owned_project(db, project_id, current_user)
     try:
+        document_ids = [
+            d.id for d in db.query(Document.id).filter(Document.project_id == project.id).all()
+        ]
+        if document_ids:
+            db.query(TestCase).filter(TestCase.requirement_id.in_(
+                db.query(Requirement.id).filter(Requirement.document_id.in_(document_ids))
+            )).delete(synchronize_session=False)
+            db.query(Requirement).filter(Requirement.document_id.in_(document_ids)).delete(synchronize_session=False)
+            db.query(Document).filter(Document.id.in_(document_ids)).delete(synchronize_session=False)
         db.delete(project)
         db.commit()
     except SQLAlchemyError as exc:
+        db.rollback()
         raise HTTPException(status_code=500, detail="Database error while deleting project") from exc

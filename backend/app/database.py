@@ -229,7 +229,7 @@ def check_database_connection() -> tuple[bool, str | None]:
 def _ensure_user_columns() -> None:
     statements = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance INTEGER NOT NULL DEFAULT 300",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance INTEGER NOT NULL DEFAULT 200",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS documents_uploaded_total INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE",
     ]

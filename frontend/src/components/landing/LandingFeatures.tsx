@@ -18,8 +18,8 @@ const FEATURES = [
   },
   {
     icon: Rows3,
-    title: "Test Case Studio — chỉnh sửa hàng loạt",
-    description: "Sửa trực tiếp như một bảng dữ liệu liền mạch (Bulk Edit), lọc động theo Priority, Status, Type, lưu đa luồng tốc độ cao.",
+    title: "Test Case Studio — quản lý như một bảng dữ liệu",
+    description: "Xem toàn bộ Test Case theo từng Requirement, chỉnh sửa nhanh từng dòng, lọc động theo Priority, Status, Type.",
   },
   {
     icon: ShieldCheck,

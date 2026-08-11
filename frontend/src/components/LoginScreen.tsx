@@ -35,6 +35,11 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: L
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  // Bước "2. Verify" thật sự — trước đây stepper có sẵn UI cho bước này nhưng chưa từng
+  // được dùng: đăng ký xong (khi Confirm Email đang bật, không có access_token trả về)
+  // bị nhảy thẳng về tab Sign In với message chung chung, không hề nhắc user đi check mail.
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
+  const [pendingVerifyEmail, setPendingVerifyEmail] = useState("");
 
   // Sync URL when switching between login/register
   const switchMode = (toLogin: boolean) => {
@@ -43,6 +48,7 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: L
     setSuccessMsg("");
     setPassword("");
     setConfirmPassword("");
+    setAwaitingVerification(false);
     const path = toLogin ? "/login" : "/register";
     window.history.pushState(null, "", path);
   };
@@ -52,6 +58,7 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: L
     const handlePopState = () => {
       const p = window.location.pathname;
       setIsLogin(p !== "/register");
+      setAwaitingVerification(false);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -68,10 +75,24 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: L
       setLoading(false);
       return;
     }
-    if (password.length < 6) {
-      setErrorMsg("Mật khẩu phải có ít nhất 6 ký tự");
-      setLoading(false);
-      return;
+    // Chỉ validate độ dài/độ phức tạp khi ĐĂNG KÝ — không áp cho đăng nhập, vì user cũ có
+    // thể đã tạo mật khẩu từ trước khi policy này được siết chặt (8 ký tự + đủ loại ký tự),
+    // validate khi login sẽ khoá nhầm user hợp lệ ra khỏi tài khoản của chính họ.
+    if (!isLogin) {
+      if (password.length < 8) {
+        setErrorMsg("Mật khẩu phải có ít nhất 8 ký tự");
+        setLoading(false);
+        return;
+      }
+      const hasLower = /[a-z]/.test(password);
+      const hasUpper = /[A-Z]/.test(password);
+      const hasDigit = /[0-9]/.test(password);
+      const hasSymbol = /[^A-Za-z0-9]/.test(password);
+      if (!(hasLower && hasUpper && hasDigit && hasSymbol)) {
+        setErrorMsg("Mật khẩu phải có chữ hoa, chữ thường, số và ký tự đặc biệt");
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -99,9 +120,10 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: L
         if (data.access_token) {
           onLoginSuccess(data.access_token, data.refresh_token, email);
         } else {
-          setSuccessMsg("Tạo tài khoản thành công! Vui lòng đăng nhập.");
-          setIsLogin(true);
+          setPendingVerifyEmail(email);
+          setAwaitingVerification(true);
           setPassword("");
+          setConfirmPassword("");
         }
       }
 
@@ -130,153 +152,195 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: L
           </div>
         </div>
 
-        {/* Tab switcher */}
-        <div className="auth2-tabs">
-          <button
-            type="button"
-            className={`auth2-tab ${isLogin ? "active" : ""}`}
-            onClick={() => switchMode(true)}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            className={`auth2-tab ${!isLogin ? "active" : ""}`}
-            onClick={() => switchMode(false)}
-          >
-            Register
-          </button>
-          <div className="auth2-tab-indicator" style={{ transform: `translateX(${isLogin ? "0%" : "100%"})` }} />
-        </div>
-
-        {/* Header */}
-        <div className="auth2-form-header">
-          <h1 className="auth2-form-title">
-            {isLogin ? "Welcome back" : "Create account"}
-          </h1>
-          <p className="auth2-form-sub">
-            {isLogin ? "Sign in to your workspace" : "Start your test journey for free"}
-          </p>
-        </div>
-
-        {/* Register stepper */}
-        {!isLogin && (
-          <div className="auth2-stepper">
-            <div className="auth2-step active">
-              <div className="auth2-step-num">1</div>
-              <span>Account</span>
+        {awaitingVerification ? (
+          <>
+            {/* Header */}
+            <div className="auth2-form-header">
+              <h1 className="auth2-form-title">Check your email</h1>
+              <p className="auth2-form-sub">Xác nhận email để hoàn tất đăng ký</p>
             </div>
-            <div className="auth2-step-line" />
-            <div className="auth2-step">
-              <div className="auth2-step-num">2</div>
-              <span>Verify</span>
-            </div>
-          </div>
-        )}
 
-        {/* Messages */}
-        {successMsg && (
-          <div className="auth2-msg auth2-msg--success">
-            <CheckCircle2 size={15} />
-            {successMsg}
-          </div>
-        )}
-        {errorMsg && (
-          <div className="auth2-msg auth2-msg--error">
-            {errorMsg}
-          </div>
-        )}
-
-        {/* Form */}
-        <form className="auth2-form" onSubmit={handleSubmit}>
-          <div className="auth2-field">
-            <label className="auth2-label">Email</label>
-            <div className="auth2-input-wrap">
-              <Mail size={16} className="auth2-input-icon" />
-              <input
-                type="email"
-                className="auth2-input"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          <div className="auth2-field">
-            <div className="auth2-label-row">
-              <label className="auth2-label">Password</label>
-              {isLogin && <span className="auth2-forgot">Forgot?</span>}
-            </div>
-            <div className="auth2-input-wrap">
-              <Lock size={16} className="auth2-input-icon" />
-              <input
-                type={showPassword ? "text" : "password"}
-                className="auth2-input"
-                placeholder={isLogin ? "Enter your password" : "Min. 6 characters"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                autoComplete={isLogin ? "current-password" : "new-password"}
-                disabled={loading}
-              />
-              <button
-                type="button"
-                className="auth2-eye-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          {!isLogin && (
-            <div className="auth2-field">
-              <label className="auth2-label">Confirm Password</label>
-              <div className="auth2-input-wrap">
-                <Lock size={16} className="auth2-input-icon" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  className="auth2-input"
-                  placeholder="Confirm your password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  autoComplete="new-password"
-                  disabled={loading}
-                />
+            {/* Stepper — bước 2 (Verify) đang active */}
+            <div className="auth2-stepper">
+              <div className="auth2-step">
+                <div className="auth2-step-num">1</div>
+                <span>Account</span>
+              </div>
+              <div className="auth2-step-line" />
+              <div className="auth2-step active">
+                <div className="auth2-step-num">2</div>
+                <span>Verify</span>
               </div>
             </div>
-          )}
 
-          <button type="submit" className="auth2-submit-btn" disabled={loading}>
-            {loading ? (
-              <Loader2 size={18} className="auth2-spinner" />
-            ) : isLogin ? (
-              "Sign In"
-            ) : (
-              <>Continue <ArrowRight size={16} /></>
+            <div className="auth2-msg auth2-msg--success" style={{ marginTop: "16px", alignItems: "flex-start" }}>
+              <CheckCircle2 size={15} style={{ marginTop: "2px", flexShrink: 0 }} />
+              <span>
+                Chúng tôi đã gửi email xác nhận tới <strong>{pendingVerifyEmail}</strong>.
+                Vui lòng kiểm tra hộp thư (kể cả mục Spam) và bấm vào link xác nhận trước khi đăng nhập.
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="auth2-submit-btn"
+              style={{ marginTop: "16px" }}
+              onClick={() => switchMode(true)}
+            >
+              Back to Sign In
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Tab switcher */}
+            <div className="auth2-tabs">
+              <button
+                type="button"
+                className={`auth2-tab ${isLogin ? "active" : ""}`}
+                onClick={() => switchMode(true)}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                className={`auth2-tab ${!isLogin ? "active" : ""}`}
+                onClick={() => switchMode(false)}
+              >
+                Register
+              </button>
+              <div className="auth2-tab-indicator" style={{ transform: `translateX(${isLogin ? "0%" : "100%"})` }} />
+            </div>
+
+            {/* Header */}
+            <div className="auth2-form-header">
+              <h1 className="auth2-form-title">
+                {isLogin ? "Welcome back" : "Create account"}
+              </h1>
+              <p className="auth2-form-sub">
+                {isLogin ? "Sign in to your workspace" : "Start your test journey for free"}
+              </p>
+            </div>
+
+            {/* Register stepper */}
+            {!isLogin && (
+              <div className="auth2-stepper">
+                <div className="auth2-step active">
+                  <div className="auth2-step-num">1</div>
+                  <span>Account</span>
+                </div>
+                <div className="auth2-step-line" />
+                <div className="auth2-step">
+                  <div className="auth2-step-num">2</div>
+                  <span>Verify</span>
+                </div>
+              </div>
             )}
-          </button>
-        </form>
 
-        <p className="auth2-switch-text">
-          {isLogin ? (
-            <>Don't have an account?{" "}
-              <span className="auth2-switch-link" onClick={() => switchMode(false)}>Create one</span>
-            </>
-          ) : (
-            <>Already registered?{" "}
-              <span className="auth2-switch-link" onClick={() => switchMode(true)}>Sign in</span>
-            </>
-          )}
-        </p>
+            {/* Messages */}
+            {successMsg && (
+              <div className="auth2-msg auth2-msg--success">
+                <CheckCircle2 size={15} />
+                {successMsg}
+              </div>
+            )}
+            {errorMsg && (
+              <div className="auth2-msg auth2-msg--error">
+                {errorMsg}
+              </div>
+            )}
+
+            {/* Form */}
+            <form className="auth2-form" onSubmit={handleSubmit}>
+              <div className="auth2-field">
+                <label className="auth2-label">Email</label>
+                <div className="auth2-input-wrap">
+                  <Mail size={16} className="auth2-input-icon" />
+                  <input
+                    type="email"
+                    className="auth2-input"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div className="auth2-field">
+                <div className="auth2-label-row">
+                  <label className="auth2-label">Password</label>
+                  {isLogin && <span className="auth2-forgot">Forgot?</span>}
+                </div>
+                <div className="auth2-input-wrap">
+                  <Lock size={16} className="auth2-input-icon" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="auth2-input"
+                    placeholder={isLogin ? "Enter your password" : "Min. 8 characters, mix of upper/lower/digit/symbol"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={isLogin ? undefined : 8}
+                    autoComplete={isLogin ? "current-password" : "new-password"}
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    className="auth2-eye-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {!isLogin && (
+                <div className="auth2-field">
+                  <label className="auth2-label">Confirm Password</label>
+                  <div className="auth2-input-wrap">
+                    <Lock size={16} className="auth2-input-icon" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      className="auth2-input"
+                      placeholder="Confirm your password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" className="auth2-submit-btn" disabled={loading}>
+                {loading ? (
+                  <Loader2 size={18} className="auth2-spinner" />
+                ) : isLogin ? (
+                  "Sign In"
+                ) : (
+                  <>Continue <ArrowRight size={16} /></>
+                )}
+              </button>
+            </form>
+
+            <p className="auth2-switch-text">
+              {isLogin ? (
+                <>Don't have an account?{" "}
+                  <span className="auth2-switch-link" onClick={() => switchMode(false)}>Create one</span>
+                </>
+              ) : (
+                <>Already registered?{" "}
+                  <span className="auth2-switch-link" onClick={() => switchMode(true)}>Sign in</span>
+                </>
+              )}
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

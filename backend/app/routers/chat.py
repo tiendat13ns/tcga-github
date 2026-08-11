@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.models import Project, User
 from app.schemas.chat_schema import ChatHistoryMessage, ChatHistoryResponse, ChatRequest, ChatResponse
 from app.services.chat_history_service import clear_history, get_history
 from app.services.chat_service import process_chat_message, stream_chat_message
+from app.services.ownership_service import is_document_owned, is_project_owned
 
 router = APIRouter()
 
@@ -56,28 +57,12 @@ def delete_chat_history(
     clear_history(db, project_uuid, current_user.id)
 
 
-def _extract_user_id(request: Request) -> str | None:
-    """Lấy user_id từ Bearer token để ghi credit log."""
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    try:
-        from app.database import SessionLocal
-        from app.core.auth import get_current_user_from_token
-        db = SessionLocal()
-        try:
-            user = get_current_user_from_token(auth[7:], db)
-            return str(user.id) if user else None
-        finally:
-            db.close()
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("Failed to extract user_id from token: %s", e)
-        return None
-
-
 @router.post("/message")
-async def chat(raw_request: Request, request: ChatRequest):
+async def chat(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Endpoint cho chat stateless — hỗ trợ cả JSON và SSE streaming.
 
@@ -85,9 +70,19 @@ async def chat(raw_request: Request, request: ChatRequest):
     - stream=true: Trả về StreamingResponse với Content-Type text/event-stream.
       Mỗi chunk có dạng: data: {"chunk": "..."}\\n\\n
       Kết thúc stream: data: [DONE]\\n\\n
+
+    Bắt buộc đăng nhập — trước đây auth optional (chỉ để log credit), khiến ai cũng gọi
+    được miễn phí. document_ids/project_id được xác minh thuộc user hiện tại NGAY tại đây
+    (agent tool bên trong cũng tự kiểm tra lại cho các ID phát sinh giữa chừng, xem
+    services/agent/chat_agent.py — đây là kiểm tra sớm cho các ID có sẵn trong request).
     """
-    # Gắn user_id vào request để credit_service có thể ghi log
-    request.user_id = _extract_user_id(raw_request)
+    request.user_id = str(current_user.id)
+
+    if request.project_id and not is_project_owned(db, request.project_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    for doc_id in request.document_ids:
+        if not is_document_owned(db, doc_id, current_user.id):
+            raise HTTPException(status_code=404, detail="Document not found")
 
     if request.stream:
         return StreamingResponse(

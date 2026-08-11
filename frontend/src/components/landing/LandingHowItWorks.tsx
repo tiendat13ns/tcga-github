@@ -21,7 +21,7 @@ const STEPS = [
     number: "04",
     title: "Chỉnh sửa & Export",
     description:
-      "Rà soát, chỉnh sửa hàng loạt ngay trong Test Case Studio như một bảng dữ liệu liền mạch, rồi xuất file Excel chuyên nghiệp sẵn sàng bàn giao chỉ với 1 click.",
+      "Rà soát, chỉnh sửa từng Test Case ngay trong Test Case Studio như một bảng dữ liệu liền mạch, rồi xuất file Excel chuyên nghiệp sẵn sàng bàn giao chỉ với 1 click.",
   },
 ];
 

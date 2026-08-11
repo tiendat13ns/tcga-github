@@ -81,7 +81,7 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)) -> Any:
 
     # Insert into public.users
     user_role = "admin" if _is_admin_email(user_in.email) else "user"
-    initial_credits = 3500 if user_role == "admin" else 300
+    initial_credits = 3500 if user_role == "admin" else 200
     new_user = User(
         id=response.user.id,
         email=user_in.email,
@@ -114,6 +114,15 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)) -> Any:
             "password": user_in.password,
         })
     except Exception as e:
+        # Supabase ném cùng loại exception cho "sai mật khẩu" lẫn "chưa xác nhận email" —
+        # trước đây gộp chung thành "Invalid email or password", khiến user vừa đăng ký
+        # xong (đúng mật khẩu) nhưng thử login trước khi confirm email bị hiểu nhầm là gõ
+        # sai. Soi message để tách 2 trường hợp cho message rõ ràng hơn.
+        if "confirm" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email chưa được xác nhận. Vui lòng kiểm tra hộp thư để xác nhận trước khi đăng nhập.",
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -129,7 +138,7 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)) -> Any:
     user = db.query(User).filter(User.id == response.user.id).first()
     if not user:
         user_role = "admin" if _is_admin_email(response.user.email) else "user"
-        initial_credits = 3500 if user_role == "admin" else 300
+        initial_credits = 3500 if user_role == "admin" else 200
         # Fallback in case they were created in supabase but not synced here
         user = User(
             id=response.user.id,
