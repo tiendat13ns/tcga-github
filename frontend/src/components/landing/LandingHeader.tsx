@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Menu, X } from "lucide-react";
 import { TCGAMark } from "../TCGALogo";
 
 type LandingHeaderProps = {
@@ -7,7 +9,17 @@ type LandingHeaderProps = {
   onGoToDashboard: () => void;
 };
 
+const NAV_LINKS = [
+  { href: "#how-it-works", label: "Cách hoạt động" },
+  { href: "#features", label: "Tính năng" },
+  { href: "#who-its-for", label: "Dành cho ai" },
+  { href: "#usage", label: "Usage" },
+  { href: "#faq", label: "FAQ" },
+];
+
 export default function LandingHeader({ isAuthenticated, onGoToLogin, onGoToRegister, onGoToDashboard }: LandingHeaderProps) {
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+
   return (
     <header className="landing-header">
       <div className="landing-header-inner">
@@ -19,11 +31,9 @@ export default function LandingHeader({ isAuthenticated, onGoToLogin, onGoToRegi
         </div>
 
         <nav className="landing-header-nav">
-          <a href="#how-it-works">Cách hoạt động</a>
-          <a href="#features">Tính năng</a>
-          <a href="#who-its-for">Dành cho ai</a>
-          <a href="#usage">Usage</a>
-          <a href="#faq">FAQ</a>
+          {NAV_LINKS.map((link) => (
+            <a key={link.href} href={link.href}>{link.label}</a>
+          ))}
         </nav>
 
         <div className="landing-header-actions">
@@ -42,7 +52,43 @@ export default function LandingHeader({ isAuthenticated, onGoToLogin, onGoToRegi
             </>
           )}
         </div>
+
+        <button
+          type="button"
+          className="landing-header-menu-btn"
+          onClick={() => setIsMobileNavOpen((v) => !v)}
+          aria-label={isMobileNavOpen ? "Đóng menu" : "Mở menu"}
+          aria-expanded={isMobileNavOpen}
+        >
+          {isMobileNavOpen ? <X size={20} strokeWidth={1.75} /> : <Menu size={20} strokeWidth={1.75} />}
+        </button>
       </div>
+
+      {isMobileNavOpen && (
+        <div className="landing-header-mobile-nav">
+          {NAV_LINKS.map((link) => (
+            <a key={link.href} href={link.href} onClick={() => setIsMobileNavOpen(false)}>
+              {link.label}
+            </a>
+          ))}
+          <div className="landing-header-mobile-actions">
+            {isAuthenticated ? (
+              <button className="btn btn-primary" onClick={onGoToDashboard}>
+                Vào Dashboard
+              </button>
+            ) : (
+              <>
+                <button className="btn btn-secondary" onClick={onGoToLogin}>
+                  Đăng nhập
+                </button>
+                <button className="btn btn-primary" onClick={onGoToRegister}>
+                  Dùng thử miễn phí
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }

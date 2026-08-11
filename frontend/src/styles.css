@@ -3820,3 +3820,51 @@ dialog.confirm-dialog[open]::backdrop {
   background: var(--accent-glow);
 }
 
+/* ── Desktop Required Gate ── */
+.desktop-required-gate {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 24px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+.desktop-required-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.desktop-required-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.desktop-required-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 360px;
+  margin: 0;
+}
+
+.desktop-required-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+

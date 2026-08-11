@@ -1,6 +1,7 @@
 import "./styles.css";
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
+import DesktopRequiredGate from "./components/DesktopRequiredGate";
 import GlobalSidebar from "./components/GlobalSidebar";
 import ProjectsGrid from "./components/Projects/ProjectsGrid";
 import ProjectDetailDashboard from "./components/Projects/ProjectDetailDashboard";
@@ -97,6 +98,7 @@ function App() {
   }
 
   return (
+    <DesktopRequiredGate onGoHome={() => navigateTo("/")} onSignOut={logout}>
     <div className="app-shell">
       {/* Main layout */}
       <div className="app-workspace">
@@ -160,6 +162,7 @@ function App() {
         </main>
       </div>
     </div>
+    </DesktopRequiredGate>
   );
 }
 
