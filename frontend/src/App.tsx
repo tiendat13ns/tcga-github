@@ -82,8 +82,8 @@ function App() {
     }
     return (
       <LoginScreen
-        onLoginSuccess={(token, userEmail) => {
-          login(token);
+        onLoginSuccess={(token, refreshToken, userEmail) => {
+          login(token, refreshToken);
           resetForLogin();
           const isAdminEmail = userEmail && userEmail.toLowerCase() === "dat96133@gmail.com";
           const targetView = isAdminEmail ? "admin" : "overview";

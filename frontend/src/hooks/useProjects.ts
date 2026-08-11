@@ -1,17 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Project } from "../components/Projects/ProjectManager";
+import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-
-/** Helper: build headers including Bearer token from localStorage. */
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = localStorage.getItem("tcga_token");
-  const headers: Record<string, string> = { ...extra };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  return headers;
-}
 
 /* ── Query Keys ─────────────────────────────────────────── */
 export const projectKeys = {
@@ -21,18 +12,16 @@ export const projectKeys = {
 
 /* ── Fetchers ───────────────────────────────────────────── */
 async function fetchProjects(): Promise<Project[]> {
-  const r = await fetch(`${API_BASE}/api/v1/projects`, {
-    headers: authHeaders(),
-  });
+  const r = await apiFetch(`${API_BASE}/api/v1/projects`);
   if (!r.ok) throw new Error("Failed to load projects");
   const d = await r.json();
   return d.projects || [];
 }
 
 async function createProjectAPI(payload: { name: string; description?: string | null }): Promise<Project> {
-  const r = await fetch(`${API_BASE}/api/v1/projects`, {
+  const r = await apiFetch(`${API_BASE}/api/v1/projects`, {
     method: "POST",
-    headers: authHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   const d = await r.json();
@@ -41,9 +30,9 @@ async function createProjectAPI(payload: { name: string; description?: string | 
 }
 
 async function updateProjectAPI(payload: { id: string; name: string; description?: string | null }): Promise<Project> {
-  const r = await fetch(`${API_BASE}/api/v1/projects/${payload.id}`, {
+  const r = await apiFetch(`${API_BASE}/api/v1/projects/${payload.id}`, {
     method: "PUT",
-    headers: authHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: payload.name, description: payload.description }),
   });
   const d = await r.json();
@@ -52,9 +41,8 @@ async function updateProjectAPI(payload: { id: string; name: string; description
 }
 
 async function deleteProjectAPI(projectId: string): Promise<void> {
-  const r = await fetch(`${API_BASE}/api/v1/projects/${projectId}`, {
+  const r = await apiFetch(`${API_BASE}/api/v1/projects/${projectId}`, {
     method: "DELETE",
-    headers: authHeaders(),
   });
   if (!r.ok) {
     const d = await r.json().catch(() => null);

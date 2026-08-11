@@ -3,7 +3,7 @@ import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, ArrowRight } from "luci
 import { TCGAAppIcon } from "./TCGALogo";
 
 type LoginScreenProps = {
-  onLoginSuccess: (token: string, email?: string) => void;
+  onLoginSuccess: (token: string, refreshToken?: string | null, email?: string) => void;
   initialMode?: "login" | "register";
 };
 
@@ -94,10 +94,10 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: L
       if (!res.ok) throw new Error(data.detail || data.message || "Xác thực thất bại");
 
       if (isLogin) {
-        onLoginSuccess(data.access_token, email);
+        onLoginSuccess(data.access_token, data.refresh_token, email);
       } else {
         if (data.access_token) {
-          onLoginSuccess(data.access_token, email);
+          onLoginSuccess(data.access_token, data.refresh_token, email);
         } else {
           setSuccessMsg("Tạo tài khoản thành công! Vui lòng đăng nhập.");
           setIsLogin(true);

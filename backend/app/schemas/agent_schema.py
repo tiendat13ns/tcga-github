@@ -20,7 +20,6 @@ class AIRequirementItem(BaseModel):
     state: Optional[List[str]] = Field(None, description="Trạng thái (State / Status)")
     clarifying_questions: Optional[List[str]] = Field(None, description="Các câu hỏi làm rõ requirement dành cho người dùng")
     source_reference: Optional[str] = Field(None, description="Trích dẫn nguồn gốc từ tài liệu")
-    confidence_score: float = Field(..., description="Điểm tin cậy của AI từ 0.0 đến 1.0")
 
 class AIRequirementOutput(BaseModel):
     requirements: List[AIRequirementItem] = Field(..., description="Danh sách các requirement được trích xuất")

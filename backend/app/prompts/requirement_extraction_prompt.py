@@ -23,7 +23,6 @@ Each requirement may also include useful metadata:
 - feature_name
 - actor
 - source_reference
-- confidence_score
 
 Rules:
 - Do not invent unsupported business logic.
@@ -48,7 +47,6 @@ Rules:
 - If a category has no support in the source text, return [] for that category instead of guessing.
 - Prefer highly detailed and complete extraction over brevity. Every field in the JSON should be as exhaustive as possible.
 - source_reference should briefly indicate where the requirement came from in the text.
-- confidence_score must be between 0 and 1.
 - IMPORTANT: For EACH requirement you extract, act as a skeptical QA lead. Identify 3 to 5 specific gaps, ambiguities, or missing boundary conditions relevant to THAT requirement that a tester would need answered to write accurate test cases. Store these in that requirement's `clarifying_questions` list. Each question must be concrete and reference a specific scenario (e.g., "What error message should appear if the project name exceeds the character limit?"). If a requirement is fully explicit, return an empty array [] for it.
 """
 
@@ -79,8 +77,7 @@ Required JSON schema:
       "module_name": "string or null",
       "feature_name": "string or null",
       "actor": "string or null",
-      "source_reference": "string or null",
-      "confidence_score": 0.0
+      "source_reference": "string or null"
     }
   ]
 }

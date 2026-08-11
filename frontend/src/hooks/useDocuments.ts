@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { DocumentItem } from "../App";
+import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const API_URL = `${API_BASE}/api/documents`;
@@ -13,14 +14,14 @@ export const documentKeys = {
 /* ── Fetchers ───────────────────────────────────────────── */
 async function fetchDocuments(projectId: string | null): Promise<DocumentItem[]> {
   const url = projectId ? `${API_URL}?project_id=${projectId}` : API_URL;
-  const r = await fetch(url);
+  const r = await apiFetch(url);
   const d = await r.json().catch(() => null);
   if (!r.ok) throw new Error(d?.detail || "Could not load documents.");
   return d;
 }
 
 async function deleteDocumentAPI(docId: string): Promise<string> {
-  const r = await fetch(`${API_URL}/selected`, {
+  const r = await apiFetch(`${API_URL}/selected`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ids: [docId] }),
@@ -30,8 +31,8 @@ async function deleteDocumentAPI(docId: string): Promise<string> {
   return docId;
 }
 
-async function clearDocumentsAPI(): Promise<void> {
-  const r = await fetch(API_URL, { method: "DELETE" });
+async function clearDocumentsAPI(projectId: string): Promise<void> {
+  const r = await apiFetch(`${API_URL}?project_id=${projectId}`, { method: "DELETE" });
   const d = await r.json().catch(() => null);
   if (!r.ok) throw new Error(d?.detail || "Could not clear history.");
 }
@@ -62,11 +63,11 @@ export function useDeleteDocument(projectId: string | null) {
   });
 }
 
-/** Clear all documents and update the cache. */
+/** Clear all documents of the given project and update the cache. */
 export function useClearDocuments(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: clearDocumentsAPI,
+    mutationFn: () => clearDocumentsAPI(projectId as string),
     onSuccess: () => {
       queryClient.setQueryData<DocumentItem[]>(
         documentKeys.byProject(projectId),

@@ -1,13 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = localStorage.getItem("tcga_token");
-  const headers: Record<string, string> = { ...extra };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
 
 /* ── Query Keys ─────────────────────────────────────────── */
 export const usageKeys = {
@@ -49,17 +43,13 @@ export interface UsageLogsResponse {
 
 /* ── Fetchers ───────────────────────────────────────────── */
 async function fetchUsageSummary(): Promise<UsageSummary> {
-  const r = await fetch(`${API_BASE}/api/usage/summary`, {
-    headers: authHeaders(),
-  });
+  const r = await apiFetch(`${API_BASE}/api/usage/summary`);
   if (!r.ok) throw new Error("Failed to load usage summary");
   return r.json();
 }
 
 async function fetchUsageLogs(limit = 50, offset = 0): Promise<UsageLogsResponse> {
-  const r = await fetch(`${API_BASE}/api/usage/logs?limit=${limit}&offset=${offset}`, {
-    headers: authHeaders(),
-  });
+  const r = await apiFetch(`${API_BASE}/api/usage/logs?limit=${limit}&offset=${offset}`);
   if (!r.ok) throw new Error("Failed to load usage logs");
   return r.json();
 }

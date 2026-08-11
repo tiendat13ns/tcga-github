@@ -16,7 +16,7 @@ type TestCaseTableViewProps = {
   testCases: StudioTestCaseItem[];
   isLoadingTCs: boolean;
   executionSummary: ExecutionSummary;
-  exportUrl: string;
+  onExport: () => void;
 
   filterPriority: string;
   onFilterPriorityChange: (v: string) => void;
@@ -53,7 +53,7 @@ export default function TestCaseTableView({
   testCases,
   isLoadingTCs,
   executionSummary,
-  exportUrl,
+  onExport,
   filterPriority,
   onFilterPriorityChange,
   filterTestType,
@@ -383,10 +383,10 @@ export default function TestCaseTableView({
             )}
 
             {totalCount > 0 && (
-              <a href={exportUrl} className="btn btn-secondary" target="_blank" rel="noopener noreferrer"
+              <button type="button" onClick={onExport} className="btn btn-secondary"
                  style={{ gap: "6px", textDecoration: "none", fontSize: "12px", padding: "6px 14px", height: "32px", marginLeft: "4px" }}>
                 <DownloadIcon /> Export Excel
-              </a>
+              </button>
             )}
           </div>
         </div>

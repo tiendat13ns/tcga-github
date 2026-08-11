@@ -42,6 +42,10 @@ class UserLogin(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 @router.post("/register")
 def register_user(user_in: UserRegister, db: Session = Depends(get_db)) -> Any:
     if not supabase:
@@ -91,7 +95,8 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)) -> Any:
     return {
         "message": "User created successfully",
         "user_id": new_user.id,
-        "access_token": response.session.access_token if response.session else None
+        "access_token": response.session.access_token if response.session else None,
+        "refresh_token": response.session.refresh_token if response.session else None,
     }
 
 
@@ -147,6 +152,36 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)) -> Any:
         "token_type": "bearer",
     }
 
+
+@router.post("/refresh")
+def refresh_access_token(payload: RefreshRequest) -> Any:
+    """Đổi refresh_token lấy access_token mới — cho phép FE giữ phiên đăng nhập mà
+    không cần bắt user login lại mỗi khi access_token (JWT, sống ngắn) hết hạn."""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Supabase credentials are not configured",
+        )
+
+    try:
+        response = supabase.auth.refresh_session(payload.refresh_token)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    if not response.session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not refresh session",
+        )
+
+    return {
+        "access_token": response.session.access_token,
+        "refresh_token": response.session.refresh_token,
+        "token_type": "bearer",
+    }
 
 
 @router.get("/me")

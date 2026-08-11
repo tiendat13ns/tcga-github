@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { StudioTestCaseItem } from "../components/TesterStudio";
+import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -16,7 +17,7 @@ async function fetchTestCases(filters: Record<string, any>) {
     if (value) params.append(key, String(value));
   }
 
-  const r = await fetch(`${API_BASE}/api/v1/test-cases?${params.toString()}`);
+  const r = await apiFetch(`${API_BASE}/api/v1/test-cases?${params.toString()}`);
   if (!r.ok) throw new Error("Failed to load test cases");
   const d = await r.json();
   return {
@@ -26,7 +27,7 @@ async function fetchTestCases(filters: Record<string, any>) {
 }
 
 async function updateTestCaseAPI(payload: { id: string; data: Partial<StudioTestCaseItem> }): Promise<StudioTestCaseItem> {
-  const r = await fetch(`${API_BASE}/api/v1/test-cases/${payload.id}`, {
+  const r = await apiFetch(`${API_BASE}/api/v1/test-cases/${payload.id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload.data),
@@ -79,7 +80,7 @@ export function useUpdateTestCase() {
 }
 
 async function createTestCaseAPI(payload: any): Promise<StudioTestCaseItem> {
-  const r = await fetch(`${API_BASE}/api/v1/test-cases`, {
+  const r = await apiFetch(`${API_BASE}/api/v1/test-cases`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -100,7 +101,7 @@ export function useCreateTestCase() {
 }
 
 async function generateBugReportAPI(payload: { id: string; actual_result: string }): Promise<{ report: string }> {
-  const r = await fetch(`${API_BASE}/api/v1/test-cases/${payload.id}/bug-report`, {
+  const r = await apiFetch(`${API_BASE}/api/v1/test-cases/${payload.id}/bug-report`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ actual_result: payload.actual_result }),

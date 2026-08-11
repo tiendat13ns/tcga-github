@@ -1,13 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = localStorage.getItem("tcga_token");
-  const headers: Record<string, string> = { ...extra };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
 
 export const adminKeys = {
   stats: ["admin", "stats"] as const,
@@ -37,9 +31,7 @@ export interface AdminUser {
 
 /* ── Fetchers ───────────────────────────────────────────── */
 async function fetchAdminStats(): Promise<AdminStats> {
-  const r = await fetch(`${API_BASE}/api/admin/stats`, {
-    headers: authHeaders(),
-  });
+  const r = await apiFetch(`${API_BASE}/api/admin/stats`);
   if (!r.ok) {
     const errData = await r.json().catch(() => ({}));
     throw new Error(errData.detail || "Không thể tải thống kê Admin");
@@ -48,9 +40,7 @@ async function fetchAdminStats(): Promise<AdminStats> {
 }
 
 async function fetchAdminUsers(): Promise<AdminUser[]> {
-  const r = await fetch(`${API_BASE}/api/admin/users`, {
-    headers: authHeaders(),
-  });
+  const r = await apiFetch(`${API_BASE}/api/admin/users`);
   if (!r.ok) {
     const errData = await r.json().catch(() => ({}));
     throw new Error(errData.detail || "Không thể tải danh sách người dùng Admin");
@@ -59,9 +49,9 @@ async function fetchAdminUsers(): Promise<AdminUser[]> {
 }
 
 async function updateUserCredits({ userId, credit_balance }: { userId: string; credit_balance: number }) {
-  const r = await fetch(`${API_BASE}/api/admin/users/${userId}/credits`, {
+  const r = await apiFetch(`${API_BASE}/api/admin/users/${userId}/credits`, {
     method: "PATCH",
-    headers: authHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ credit_balance }),
   });
   if (!r.ok) {

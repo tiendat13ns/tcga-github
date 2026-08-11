@@ -168,6 +168,47 @@ def list_documents_by_project(project_id: str) -> list[DocumentMetadata]:
         return [_document_model_to_schema(doc) for doc in documents]
 
 
+def list_documents_by_projects(project_ids: list) -> list[DocumentMetadata]:
+    """Lấy documents thuộc nhiều project cùng lúc — dùng khi liệt kê toàn bộ document của
+    một user qua tất cả project họ sở hữu (thay cho list_documents() vốn trả về TOÀN HỆ THỐNG)."""
+    if not is_database_configured() or not project_ids:
+        return []
+
+    with SessionLocal() as db:
+        documents = (
+            db.query(Document)
+            .filter(Document.project_id.in_(project_ids))
+            .order_by(Document.uploaded_at.desc())
+            .all()
+        )
+        return [_document_model_to_schema(doc) for doc in documents]
+
+
+def clear_project_documents(project_id: str) -> None:
+    """Xoá toàn bộ document/requirement/test case CỦA MỘT PROJECT — scoped, không đụng tới
+    dữ liệu của project khác (khác với clear_upload_history() vốn xoá toàn hệ thống)."""
+    _ensure_storage()
+
+    if not is_database_configured():
+        return
+
+    project_uuid = UUID(project_id)
+    with SessionLocal() as db:
+        documents = db.query(Document).filter(Document.project_id == project_uuid).all()
+
+        for document in documents:
+            _delete_uploaded_file(document.file_path)
+
+        document_ids = [d.id for d in documents]
+        if document_ids:
+            db.query(TestCase).filter(TestCase.requirement_id.in_(
+                db.query(Requirement.id).filter(Requirement.document_id.in_(document_ids))
+            )).delete(synchronize_session=False)
+            db.query(Requirement).filter(Requirement.document_id.in_(document_ids)).delete(synchronize_session=False)
+            db.query(Document).filter(Document.id.in_(document_ids)).delete(synchronize_session=False)
+            db.commit()
+
+
 def _safe_filename(filename: str) -> str:
     name = Path(filename).name.strip()
     return re.sub(r"[^A-Za-z0-9._-]", "_", name)

@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
 import { useDocumentDetail } from "../hooks/useRequirements";
+import { apiFetch, downloadWithAuth } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const API_V1_REQUIREMENTS_URL = `${API_BASE}/api/v1/requirements`;
 const API_V1_DOCUMENTS_URL = `${API_BASE}/api/v1/documents`;
 const API_URL = `${API_BASE}/api/documents`;
-
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = localStorage.getItem("tcga_token");
-  const headers: Record<string, string> = { ...extra };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
 
 export type RequirementItem = {
   id: string; title: string; description: string;
@@ -23,7 +17,7 @@ export type RequirementItem = {
   inputs: string[] | null; outputs: string[] | null;
   preconditions: string[] | null; validation_rules: string[] | null;
   exception_flows: string[] | null; source_reference: string | null;
-  confidence_score: number | null; status: string; version: number;
+  status: string; version: number;
   clarifying_questions: string[] | null;
   user_answers: string[] | null;
 };
@@ -108,9 +102,7 @@ export default function RequirementViewer({ requirements, document, onClose, onR
     requirements.requirements.forEach(async (req) => {
       if (testCasesMap[req.id] === undefined && !generatingTestCasesId) {
         try {
-          const r = await fetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases`, {
-            headers: authHeaders(),
-          });
+          const r = await apiFetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases`);
           if (r.ok) {
             const d = await r.json();
             setTestCasesMap((prev) => ({ ...prev, [req.id]: d.total_test_cases > 0 ? d : null }));
@@ -130,7 +122,7 @@ export default function RequirementViewer({ requirements, document, onClose, onR
     const docId = requirements.document_id;
     setLoadingPreviewId(docId);
     try {
-      const r = await fetch(`${API_URL}/${docId}`, { headers: authHeaders() });
+      const r = await apiFetch(`${API_URL}/${docId}`);
       const d = await r.json().catch(() => null);
       if (!r.ok) throw new Error(d?.detail || "Could not load preview.");
       setSelectedDocumentDetail(d);
@@ -145,9 +137,8 @@ export default function RequirementViewer({ requirements, document, onClose, onR
   const generateTestCases = async (requirementId: string) => {
     setGeneratingTestCasesId(requirementId); setMessage("");
     try {
-      const r = await fetch(`${API_V1_REQUIREMENTS_URL}/${requirementId}/test-cases/generate`, {
+      const r = await apiFetch(`${API_V1_REQUIREMENTS_URL}/${requirementId}/test-cases/generate`, {
         method: "POST",
-        headers: authHeaders(),
       });
       const d = await r.json().catch(() => null);
       if (!r.ok) throw new Error(d?.detail || "Could not generate test cases.");
@@ -164,9 +155,9 @@ export default function RequirementViewer({ requirements, document, onClose, onR
 
     setSubmittingAnswersId(req.id); setMessage("");
     try {
-      const r = await fetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/answers`, {
+      const r = await apiFetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/answers`, {
         method: "PATCH",
-        headers: authHeaders({ "Content-Type": "application/json" }),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers }),
       });
       const saved = await r.json().catch(() => null);
@@ -343,16 +334,6 @@ export default function RequirementViewer({ requirements, document, onClose, onR
                     <RequirementFieldList items={req.error_handling} />
                   </div>
                 )}
-                {req.confidence_score !== null && (
-                  <div className="req-confidence">
-                    <span>Confidence</span>
-                    <div className="confidence-bar">
-                      <div className="confidence-fill" style={{ width: `${(req.confidence_score * 100).toFixed(0)}%` }} />
-                    </div>
-                    <span>{(req.confidence_score * 100).toFixed(0)}%</span>
-                  </div>
-                )}
-
                 {/* HITL Q&A Panel */}
                 {(!testCasesMap[req.id] && generatingTestCasesId !== req.id) && req.clarifying_questions && req.clarifying_questions.length > 0 && (
                   <div className="hitl-qa-panel">
@@ -397,15 +378,19 @@ export default function RequirementViewer({ requirements, document, onClose, onR
                       <span className="tc-panel-title">Test Cases</span>
                       <span className="tc-count-badge">{testCasesMap[req.id]!.total_test_cases}</span>
                       <div style={{ flex: 1 }} />
-                      <a
-                        href={`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases/export`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          downloadWithAuth(
+                            `${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases/export`,
+                            `test_cases_${req.id.slice(0, 8)}.xlsx`
+                          ).catch((e) => setMessage(e instanceof Error ? e.message : "Could not export file."));
+                        }}
                         className="btn btn-secondary"
                         style={{ padding: "4px 10px", fontSize: "11px", gap: "6px", textDecoration: "none" }}
                       >
                         <FileTextIcon /> Export Excel
-                      </a>
+                      </button>
                     </div>
                     <div className="tc-table-wrap">
                       <table className="tc-table">

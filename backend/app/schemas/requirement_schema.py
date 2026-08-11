@@ -21,7 +21,6 @@ class RequirementResponse(BaseModel):
     validation_rules: list[str] | None = None
     exception_flows: list[str] | None = None
     source_reference: str | None = None
-    confidence_score: float | None = None
     status: str
     version: int
     # Human-in-the-Loop Q&A fields

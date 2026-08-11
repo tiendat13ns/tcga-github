@@ -3,19 +3,12 @@ import type { DocumentItem } from "../../App";
 import type { GenerateRequirementsResponse } from "../RequirementViewer";
 import { useProjectDocuments, useDeleteDocument, useClearDocuments, useAddDocumentsToCache } from "../../hooks/useDocuments";
 import { useAuth } from "../../contexts/AuthContext";
+import { apiFetch } from "../../lib/api";
 import ConfirmDialog from "../ConfirmDialog";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const API_V1_DOCUMENTS_URL = `${API_BASE}/api/v1/documents`;
 const API_V1_REQUIREMENTS_URL = `${API_BASE}/api/v1/requirements`;
-
-// Các endpoint sinh requirement/test case giờ yêu cầu đăng nhập + trừ credit → phải gửi token.
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = localStorage.getItem("tcga_token");
-  const headers: Record<string, string> = { ...extra };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
 
 type DocumentListProps = {
   projectId: string | null;
@@ -79,7 +72,7 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
       if (doc.status === "completed" && existingRequirements[doc.id] === undefined && !isLoadingRequirements[doc.id]) {
         setIsLoadingRequirements((prev) => ({ ...prev, [doc.id]: true }));
         try {
-          const r = await fetch(`${API_V1_DOCUMENTS_URL}/${doc.id}/requirements`);
+          const r = await apiFetch(`${API_V1_DOCUMENTS_URL}/${doc.id}/requirements`);
           if (r.ok) {
             const d = await r.json();
             setExistingRequirements((prev) => ({ ...prev, [doc.id]: d.total_requirements > 0 ? d : null }));
@@ -137,7 +130,7 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
   const generateRequirements = async (doc: DocumentItem) => {
     setGeneratingRequirementsId(doc.id); setMessage("");
     try {
-      const r = await fetch(`${API_V1_DOCUMENTS_URL}/${doc.id}/requirements/generate`, { method: "POST", headers: authHeaders() });
+      const r = await apiFetch(`${API_V1_DOCUMENTS_URL}/${doc.id}/requirements/generate`, { method: "POST" });
       const d = await r.json().catch(() => null);
       if (!r.ok) throw new Error(d?.detail || "Could not generate requirements.");
       setExistingRequirements((prev) => ({ ...prev, [doc.id]: d }));
@@ -158,7 +151,7 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
     try {
       let done = 0;
       for (const req of reqs.requirements) {
-        const r = await fetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases/generate`, { method: "POST", headers: authHeaders() });
+        const r = await apiFetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases/generate`, { method: "POST" });
         if (!r.ok) {
           const d = await r.json().catch(() => null);
           throw new Error(d?.detail || `Không sinh được test case cho requirement "${req.title}".`);

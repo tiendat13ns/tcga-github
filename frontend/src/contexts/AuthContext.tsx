@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { getAccessToken, setTokens, clearTokens } from "../lib/api";
 
 type User = {
   id: string;
@@ -14,7 +15,7 @@ type AuthContextType = {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isLoading: boolean;
-  login: (token: string) => void;
+  login: (token: string, refreshToken?: string | null) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -24,7 +25,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem("tcga_token"));
+  const [token, setToken] = useState<string | null>(() => getAccessToken());
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = async (authToken: string) => {
@@ -62,17 +63,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
-  const login = (newToken: string) => {
+  // apiFetch (lib/api.ts) bắn sự kiện này khi access_token hết hạn VÀ refresh cũng thất
+  // bại — không thể gọi logout() từ đó trực tiếp vì module đó nằm ngoài React context.
+  useEffect(() => {
+    const handleForcedLogout = () => logout();
+    window.addEventListener("tcga:logout", handleForcedLogout);
+    return () => window.removeEventListener("tcga:logout", handleForcedLogout);
+  }, []);
+
+  const login = (newToken: string, refreshToken?: string | null) => {
     // Xóa sạch cache của tài khoản trước đó — tránh hiện nhầm project/data của user cũ
     // cho tới khi F5 (React Query không tự biết đổi user vì queryKey không đổi).
     queryClient.clear();
-    localStorage.setItem("tcga_token", newToken);
+    setTokens(newToken, refreshToken);
     setToken(newToken);
   };
 
   const logout = () => {
     queryClient.clear();
-    localStorage.removeItem("tcga_token");
+    clearTokens();
     setToken(null);
     setUser(null);
   };

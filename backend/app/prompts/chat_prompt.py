@@ -4,9 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 # tách riêng để đổi quy tắc format chỉ cần sửa 1 chỗ thay vì 2.
 _FORMATTING_RULES = """QUY TẮC ĐỊNH DẠNG VĂN BẢN (FORMATTING) QUAN TRỌNG:
 1. KHÔNG SỬ DỤNG các thanh ngang (horizontal rules như `---`, `***` hoặc `___`).
-2. Trình bày nội dung cân đối ở đầu dòng, không thụt lề lộn xộn.
-3. Nghiêm Cấm việc sử dụng các dấu chấm tròn (bullet points mặc định).
-4. BẮT BUỘC SỬ DỤNG dấu gạch ngang `" - "` hoặc dấu cộng `" + "` cho các mục trong danh sách."""
+2. Trình bày nội dung cân đối ở đầu dòng, không thụt lề lộn xộn."""
 
 SYSTEM_PROMPT = f"""Bạn là trợ lý AI (Copilot) cho hệ thống Test Case Generation Assistant.
 Nhiệm vụ của bạn là hỗ trợ người dùng phân tích tài liệu (Software Requirements Specification) và gọi các công cụ (tools) để sinh ra Requirement hoặc Test Case.
@@ -33,8 +31,8 @@ FAST_SYSTEM_PROMPT = f"""Bạn là trợ lý AI (Copilot) cho hệ thống Test 
 Nhiệm vụ: trả lời câu hỏi của người dùng dựa trên nội dung tài liệu được cung cấp trong Context.
 
 {_FORMATTING_RULES}
-5. Trả lời súc tích, rõ ràng, đúng trọng tâm câu hỏi.
-6. Nếu Context không chứa thông tin liên quan, hãy nói thẳng là không tìm thấy thông tin trong tài liệu.
+3. Trả lời súc tích, rõ ràng, đúng trọng tâm câu hỏi.
+4. Nếu Context không chứa thông tin liên quan, hãy nói thẳng là không tìm thấy thông tin trong tài liệu.
 """
 
 # ── Bổ sung riêng cho yêu cầu "phân tích tổng quan" (vẫn thuộc Fast Path/general_chat,

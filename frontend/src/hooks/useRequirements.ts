@@ -1,15 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const API_V1_REQ = `${API_BASE}/api/v1/requirements`;
 const API_DOCS = `${API_BASE}/api/documents`;
-
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = localStorage.getItem("tcga_token");
-  const headers: Record<string, string> = { ...extra };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
 
 /* ── Query Keys ─────────────────────────────────────────── */
 export const requirementKeys = {
@@ -19,26 +13,21 @@ export const requirementKeys = {
 
 /* ── Fetchers ───────────────────────────────────────────── */
 async function fetchTestCasesForRequirement(requirementId: string) {
-  const r = await fetch(`${API_V1_REQ}/${requirementId}/test-cases`, {
-    headers: authHeaders(),
-  });
+  const r = await apiFetch(`${API_V1_REQ}/${requirementId}/test-cases`);
   if (!r.ok) return null;
   const d = await r.json();
   return d.total_test_cases > 0 ? d : null;
 }
 
 async function fetchDocumentDetail(documentId: string) {
-  const r = await fetch(`${API_DOCS}/${documentId}`, {
-    headers: authHeaders(),
-  });
+  const r = await apiFetch(`${API_DOCS}/${documentId}`);
   if (!r.ok) throw new Error("Could not load document detail.");
   return r.json();
 }
 
 async function generateTestCasesAPI(requirementId: string) {
-  const r = await fetch(`${API_V1_REQ}/${requirementId}/test-cases/generate`, {
+  const r = await apiFetch(`${API_V1_REQ}/${requirementId}/test-cases/generate`, {
     method: "POST",
-    headers: authHeaders(),
   });
   const d = await r.json().catch(() => null);
   if (!r.ok) throw new Error(d?.detail || "Could not generate test cases.");
@@ -46,9 +35,9 @@ async function generateTestCasesAPI(requirementId: string) {
 }
 
 async function submitAnswersAPI({ requirementId, answers }: { requirementId: string; answers: string[] }) {
-  const r = await fetch(`${API_V1_REQ}/${requirementId}/answers`, {
+  const r = await apiFetch(`${API_V1_REQ}/${requirementId}/answers`, {
     method: "PATCH",
-    headers: authHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ answers }),
   });
   const d = await r.json().catch(() => null);

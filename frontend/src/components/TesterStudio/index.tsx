@@ -4,6 +4,7 @@ import { DocumentItem } from "../../App";
 import { useProjects } from "../../hooks/useProjects";
 import { useProjectDocuments } from "../../hooks/useDocuments";
 import { useTestCases, useUpdateTestCase, useCreateTestCase } from "../../hooks/useTestCases";
+import { downloadWithAuth } from "../../lib/api";
 import BugReportDrawer from "./BugReportDrawer";
 import ProjectSelectionView from "./ProjectSelectionView";
 import ProjectWorkspaceView from "./ProjectWorkspaceView";
@@ -329,12 +330,13 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
     }
   };
 
-  const exportUrl = (() => {
-    const params = new URLSearchParams();
-    if (selectedProject) params.append("project_id", selectedProject.id);
-    const qs = params.toString();
-    return `${API_BASE}/api/v1/test-cases/export${qs ? `?${qs}` : ""}`;
-  })();
+  const handleExport = () => {
+    if (!selectedProject) return;
+    const url = `${API_BASE}/api/v1/test-cases/export?project_id=${selectedProject.id}`;
+    downloadWithAuth(url, `test_cases_${selectedProject.id.slice(0, 8)}.xlsx`).catch((e) => {
+      alert(e instanceof Error ? e.message : "Could not export file.");
+    });
+  };
 
   return (
     <div className="tcs-container">
@@ -380,7 +382,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
           testCases={testCases}
           isLoadingTCs={isLoadingTCs}
           executionSummary={executionSummary}
-          exportUrl={exportUrl}
+          onExport={handleExport}
           filterPriority={filterPriority}
           onFilterPriorityChange={setFilterPriority}
           filterTestType={filterTestType}

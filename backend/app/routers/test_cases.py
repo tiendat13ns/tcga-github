@@ -69,7 +69,12 @@ async def generate_test_cases(
     "/{requirement_id}/test-cases",
     response_model=ListTestCasesResponse,
 )
-def get_test_cases(requirement_id: str):
+def get_test_cases(
+    requirement_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _verify_requirement_owner(db, requirement_id, current_user)
     try:
         return list_test_cases_by_requirement(requirement_id)
     except TestCaseGenerationError as exc:
@@ -87,7 +92,12 @@ def get_test_cases(requirement_id: str):
         }
     },
 )
-def export_test_cases(requirement_id: str):
+def export_test_cases(
+    requirement_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _verify_requirement_owner(db, requirement_id, current_user)
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill

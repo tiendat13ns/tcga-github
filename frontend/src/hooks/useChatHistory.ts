@@ -1,14 +1,8 @@
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import type { Message } from "../components/ChatWorkspace";
+import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = localStorage.getItem("tcga_token");
-  const headers: Record<string, string> = { ...extra };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
 
 const DEFAULT_GREETING: Message[] = [
   { id: "1", role: "ai", content: "Xin chào! Bạn đã chọn tài liệu, hãy đặt câu hỏi hoặc yêu cầu phân tích." },
@@ -21,9 +15,7 @@ export const chatHistoryKeys = {
 type ChatHistoryApiMessage = { id: string; role: "user" | "ai" | "system"; content: string; error: boolean };
 
 async function fetchChatHistory(projectId: string): Promise<Message[]> {
-  const r = await fetch(`${API_BASE}/api/chat/history?project_id=${projectId}`, {
-    headers: authHeaders(),
-  });
+  const r = await apiFetch(`${API_BASE}/api/chat/history?project_id=${projectId}`);
   if (!r.ok) throw new Error("Không tải được lịch sử chat");
   const data: { messages: ChatHistoryApiMessage[] } = await r.json();
   if (data.messages.length === 0) return DEFAULT_GREETING;
@@ -31,9 +23,8 @@ async function fetchChatHistory(projectId: string): Promise<Message[]> {
 }
 
 async function deleteChatHistoryAPI(projectId: string): Promise<void> {
-  const r = await fetch(`${API_BASE}/api/chat/history?project_id=${projectId}`, {
+  const r = await apiFetch(`${API_BASE}/api/chat/history?project_id=${projectId}`, {
     method: "DELETE",
-    headers: authHeaders(),
   });
   if (!r.ok && r.status !== 204) throw new Error("Không xóa được lịch sử chat");
 }

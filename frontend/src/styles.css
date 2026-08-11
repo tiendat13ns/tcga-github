@@ -1034,29 +1034,6 @@ input:-webkit-autofill:active {
   color: var(--text-muted);
 }
 
-.req-confidence {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-}
-
-.confidence-bar {
-  height: 3px;
-  width: 60px;
-  background: var(--border);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.confidence-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-}
-
 /* ── Test Cases ──────────────────────────────────────────── */
 .tc-panel {
   border: 1px solid var(--border-soft);
