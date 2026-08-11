@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { LogOut, Zap, ShieldCheck, ChevronRight } from "lucide-react";
 import { TCGAAppIcon } from "./TCGALogo";
 import { Project } from "./Projects/ProjectManager";
@@ -82,9 +83,23 @@ function FolderIcon() {
   );
 }
 
+type TooltipPos = { top: number; left: number };
+
+// Tooltip nổi khi hover — render qua Portal thẳng vào document.body (xem ghi chú
+// .sidebar-nav-tooltip trong styles.css: sidebar có overflow:hidden nên tooltip
+// position:absolute bên trong sẽ bị cắt cụt, phải thoát ra ngoài bằng Portal).
+function FloatingTooltip({ pos, label }: { pos: TooltipPos; label: string }) {
+  return createPortal(
+    <span className="sidebar-nav-tooltip" style={{ top: pos.top, left: pos.left, transform: "translateY(-50%)" }}>
+      {label}
+    </span>,
+    document.body
+  );
+}
+
 // Một mục nav trong Sidebar. Khi thu gọn (isSidebarOpen=false): icon nằm trong khung tròn,
 // bo tròn hoàn toàn (999px) thay vì hình chữ nhật bo góc nhẹ như lúc mở rộng, kèm tooltip tối
-// nổi bên phải khi hover — CSS-only (.sidebar-nav-tooltip trong styles.css), không cần state JS.
+// nổi bên phải khi hover (FloatingTooltip).
 type SidebarNavItemProps = {
   dataTour?: string;
   isActive: boolean;
@@ -96,11 +111,23 @@ type SidebarNavItemProps = {
 };
 
 function SidebarNavItem({ dataTour, isActive, isSidebarOpen, onClick, icon, label, accent }: SidebarNavItemProps) {
+  const itemRef = useRef<HTMLLIElement>(null);
+  const [tooltipPos, setTooltipPos] = useState<TooltipPos | null>(null);
+
+  const showTooltip = () => {
+    if (isSidebarOpen) return;
+    const rect = itemRef.current?.getBoundingClientRect();
+    if (rect) setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 12 });
+  };
+
   return (
     <li
+      ref={itemRef}
       data-tour={dataTour}
       className={`project-item ${isActive ? "active" : ""}`}
       onClick={onClick}
+      onMouseEnter={showTooltip}
+      onMouseLeave={() => setTooltipPos(null)}
       style={{
         justifyContent: isSidebarOpen ? "flex-start" : "center",
         padding: isSidebarOpen ? "10px 16px" : "12px",
@@ -112,7 +139,7 @@ function SidebarNavItem({ dataTour, isActive, isSidebarOpen, onClick, icon, labe
         {icon}
         {isSidebarOpen && <div className="project-item-name" style={accent ? { fontWeight: 600 } : undefined}>{label}</div>}
       </div>
-      {!isSidebarOpen && <span className="sidebar-nav-tooltip">{label}</span>}
+      {tooltipPos && <FloatingTooltip pos={tooltipPos} label={label} />}
     </li>
   );
 }
@@ -140,6 +167,13 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
     ? Math.max(0, Math.min(100, (user!.credit_balance / currentPlanQuota) * 100))
     : null;
 
+  const toggleBtnRef = useRef<HTMLButtonElement>(null);
+  const [toggleTooltipPos, setToggleTooltipPos] = useState<TooltipPos | null>(null);
+  const showToggleTooltip = () => {
+    const rect = toggleBtnRef.current?.getBoundingClientRect();
+    if (rect) setToggleTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 12 });
+  };
+
   return (
     <aside className="global-sidebar project-sidebar" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
       <div className="sidebar-header" style={{ justifyContent: isSidebarOpen ? "space-between" : "center", padding: isSidebarOpen ? "14px 20px" : "14px 0" }}>
@@ -159,8 +193,16 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
             </button>
           </>
         ) : (
-          <button type="button" className="icon-btn-ghost" onClick={onToggleSidebar} title="Open sidebar">
+          <button
+            ref={toggleBtnRef}
+            type="button"
+            className="icon-btn-ghost"
+            onClick={onToggleSidebar}
+            onMouseEnter={showToggleTooltip}
+            onMouseLeave={() => setToggleTooltipPos(null)}
+          >
             <MenuIcon />
+            {toggleTooltipPos && <FloatingTooltip pos={toggleTooltipPos} label="Open sidebar" />}
           </button>
         )}
       </div>

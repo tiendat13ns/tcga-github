@@ -312,12 +312,14 @@ input:-webkit-autofill:active {
   opacity: 1;
 }
 
-/* ── Collapsed sidebar: icon rail + floating tooltip ── */
+/* ── Collapsed sidebar: icon rail + floating tooltip ──
+   Render qua React Portal thẳng vào document.body (xem SidebarNavItem trong
+   GlobalSidebar.tsx) — bắt buộc vì sidebar và wrapper animate-width của nó đều có
+   overflow: hidden (để clip nội dung khi transition độ rộng 280px ↔ 64px), nên tooltip
+   position:absolute nằm bên trong sẽ bị cắt cụt mất chữ thay vì thoát ra ngoài. Vị trí
+   top/left được tính bằng JS (getBoundingClientRect) và gán qua inline style. */
 .sidebar-nav-tooltip {
-  position: absolute;
-  left: calc(100% + 12px);
-  top: 50%;
-  transform: translateY(-50%) translateX(-4px);
+  position: fixed;
   background: #1a1a1a;
   color: #fff;
   font-size: 12px;
@@ -325,12 +327,10 @@ input:-webkit-autofill:active {
   padding: 6px 11px;
   border-radius: 7px;
   white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
   pointer-events: none;
-  transition: opacity var(--transition), transform var(--transition), visibility var(--transition);
-  z-index: 100;
+  z-index: 10000;
   box-shadow: var(--shadow-elevated);
+  animation: sidebar-tooltip-in 0.12s ease-out;
 }
 
 .sidebar-nav-tooltip::before {
@@ -343,10 +343,9 @@ input:-webkit-autofill:active {
   border-right-color: #1a1a1a;
 }
 
-.project-item:hover .sidebar-nav-tooltip {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(-50%) translateX(0);
+@keyframes sidebar-tooltip-in {
+  from { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+  to { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
 .create-project-form {
