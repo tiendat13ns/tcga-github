@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, ArrowRight } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, ArrowRight, ArrowLeft } from "lucide-react";
 import { TCGAAppIcon } from "./TCGALogo";
 
 type LoginScreenProps = {
   onLoginSuccess: (token: string, refreshToken?: string | null, email?: string) => void;
   initialMode?: "login" | "register";
+  onGoToLanding?: () => void;
 };
 
 
@@ -26,7 +27,7 @@ function GridPattern() {
   );
 }
 
-export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: LoginScreenProps) {
+export default function LoginScreen({ onLoginSuccess, initialMode = "login", onGoToLanding }: LoginScreenProps) {
   const [isLogin, setIsLogin] = useState(initialMode === "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -140,6 +141,12 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login" }: L
       <GridPattern />
       <div className="auth2-glow-blob auth2-glow-blob--1" />
       <div className="auth2-glow-blob auth2-glow-blob--2" />
+
+      {onGoToLanding && (
+        <button type="button" className="auth2-back-home" onClick={onGoToLanding}>
+          <ArrowLeft size={15} /> Về trang chủ
+        </button>
+      )}
 
       {/* Centered glass card */}
       <div className="auth2-glass-card">

@@ -163,7 +163,7 @@ export default function OverviewDashboard({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <button className="btn btn-primary" onClick={onNavigateToProjects} style={{ height: "38px", padding: "0 16px" }}>
+            <button data-tour="overview-new-project" className="btn btn-primary" onClick={onNavigateToProjects} style={{ height: "38px", padding: "0 16px" }}>
               <Plus size={16} strokeWidth={2} /> Tạo Project mới
             </button>
           </div>
@@ -180,7 +180,7 @@ export default function OverviewDashboard({
             </h3>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "18px" }}>
+          <div data-tour="overview-resume" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "18px" }}>
             {/* Card 1: Last Used Project */}
             <div
               className="card"
@@ -302,7 +302,7 @@ export default function OverviewDashboard({
         </div>
 
         {/* Section 2: Aggregated Metrics Cards (Unified Line Icons Matching Menu Sidebar) */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "18px" }}>
+        <div data-tour="overview-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "18px" }}>
           {/* Total Projects */}
           <div className="card" style={{ padding: "18px 20px", borderRadius: "10px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "16px", background: "var(--bg-surface)" }}>
             <div style={{ width: "42px", height: "42px", borderRadius: "8px", background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>

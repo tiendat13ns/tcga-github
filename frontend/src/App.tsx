@@ -9,7 +9,8 @@ import TesterStudio from "./components/TesterStudio";
 import UsageBilling from "./components/UsageBilling";
 import AdminDashboard from "./components/AdminDashboard";
 import OverviewDashboard from "./components/OverviewDashboard";
-import TutorialPlaceholder from "./components/TutorialPlaceholder";
+import OnboardingTour from "./components/Tutorial/OnboardingTour";
+import TutorialsView from "./components/Tutorial/TutorialsView";
 import { useAppRouter } from "./hooks/useAppRouter";
 import { useAuth } from "./contexts/AuthContext";
 import LoginScreen from "./components/LoginScreen";
@@ -46,6 +47,14 @@ function App() {
   } = useAppRouter(isAuthenticated, user);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isTourRunning, setIsTourRunning] = useState(false);
+
+  // Tour chỉ target anchor trên Sidebar + Overview (xem lib/tourSteps.ts) nên luôn chuyển
+  // về Overview trước khi bật, để mọi anchor cùng tồn tại trên 1 màn hình.
+  const startTour = () => {
+    handleNavigate("overview");
+    setIsTourRunning(true);
+  };
 
   if (isLoading) {
     return (
@@ -93,6 +102,7 @@ function App() {
           window.history.replaceState(null, "", targetPath);
         }}
         initialMode={authMode}
+        onGoToLanding={() => navigateTo("/")}
       />
     );
   }
@@ -158,10 +168,11 @@ function App() {
             <UsageBilling />
           )}
 
-          {activeView === "tutorial" && <TutorialPlaceholder />}
+          {activeView === "tutorial" && <TutorialsView onStartTour={startTour} />}
         </main>
       </div>
     </div>
+    <OnboardingTour run={isTourRunning} onFinish={() => setIsTourRunning(false)} />
     </DesktopRequiredGate>
   );
 }

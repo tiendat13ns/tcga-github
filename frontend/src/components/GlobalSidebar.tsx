@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { LogOut, Zap, ShieldCheck, ChevronRight } from "lucide-react";
 import { TCGAAppIcon } from "./TCGALogo";
 import { Project } from "./Projects/ProjectManager";
@@ -81,6 +82,41 @@ function FolderIcon() {
   );
 }
 
+// Một mục nav trong Sidebar. Khi thu gọn (isSidebarOpen=false): icon nằm trong khung tròn,
+// bo tròn hoàn toàn (999px) thay vì hình chữ nhật bo góc nhẹ như lúc mở rộng, kèm tooltip tối
+// nổi bên phải khi hover — CSS-only (.sidebar-nav-tooltip trong styles.css), không cần state JS.
+type SidebarNavItemProps = {
+  dataTour?: string;
+  isActive: boolean;
+  isSidebarOpen: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+  label: string;
+  accent?: boolean;
+};
+
+function SidebarNavItem({ dataTour, isActive, isSidebarOpen, onClick, icon, label, accent }: SidebarNavItemProps) {
+  return (
+    <li
+      data-tour={dataTour}
+      className={`project-item ${isActive ? "active" : ""}`}
+      onClick={onClick}
+      style={{
+        justifyContent: isSidebarOpen ? "flex-start" : "center",
+        padding: isSidebarOpen ? "10px 16px" : "12px",
+        margin: 0,
+        borderRadius: isSidebarOpen ? undefined : "999px",
+      }}
+    >
+      <div className="project-item-content" style={{ display: "flex", alignItems: "center", gap: "12px", flexDirection: "row", flex: isSidebarOpen ? 1 : "none", color: accent ? "var(--accent)" : undefined }}>
+        {icon}
+        {isSidebarOpen && <div className="project-item-name" style={accent ? { fontWeight: 600 } : undefined}>{label}</div>}
+      </div>
+      {!isSidebarOpen && <span className="sidebar-nav-tooltip">{label}</span>}
+    </li>
+  );
+}
+
 export type GlobalViewType = "overview" | "projects" | "project_detail" | "test_cases" | "usage" | "tutorial" | "admin";
 
 type GlobalSidebarProps = {
@@ -142,74 +178,56 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
 
       <ul className="project-list" style={{ marginTop: "16px", flex: 1, padding: isSidebarOpen ? "0 12px" : "0 4px", display: "flex", flexDirection: "column", gap: "4px" }}>
         {isAdmin && (
-          <li 
-            className={`project-item ${activeView === "admin" ? "active" : ""}`}
+          <SidebarNavItem
+            isActive={activeView === "admin"}
+            isSidebarOpen={isSidebarOpen}
             onClick={() => onNavigate("admin")}
-            style={{ justifyContent: isSidebarOpen ? "flex-start" : "center", padding: isSidebarOpen ? "10px 16px" : "12px", margin: 0, background: activeView === "admin" ? "var(--accent-glow)" : undefined }}
-            title={!isSidebarOpen ? "Admin Dashboard" : undefined}
-          >
-            <div className="project-item-content" style={{ display: "flex", alignItems: "center", gap: "12px", flexDirection: "row", flex: isSidebarOpen ? 1 : "none", color: "var(--accent)" }}>
-              <ShieldCheck size={18} />
-              {isSidebarOpen && <div className="project-item-name" style={{ fontWeight: 600 }}>Admin Dashboard</div>}
-            </div>
-          </li>
+            icon={<ShieldCheck size={18} />}
+            label="Admin Dashboard"
+            accent
+          />
         )}
 
-        <li 
-          className={`project-item ${activeView === "overview" ? "active" : ""}`}
+        <SidebarNavItem
+          dataTour="nav-overview"
+          isActive={activeView === "overview"}
+          isSidebarOpen={isSidebarOpen}
           onClick={() => onNavigate("overview")}
-          style={{ justifyContent: isSidebarOpen ? "flex-start" : "center", padding: isSidebarOpen ? "10px 16px" : "12px", margin: 0 }}
-          title={!isSidebarOpen ? "Overview" : undefined}
-        >
-          <div className="project-item-content" style={{ display: "flex", alignItems: "center", gap: "12px", flexDirection: "row", flex: isSidebarOpen ? 1 : "none" }}>
-            <PieChartIcon />
-            {isSidebarOpen && <div className="project-item-name">Overview</div>}
-          </div>
-        </li>
-        <li 
-          className={`project-item ${activeView === "projects" || activeView === "project_detail" ? "active" : ""}`}
+          icon={<PieChartIcon />}
+          label="Overview"
+        />
+        <SidebarNavItem
+          dataTour="nav-projects"
+          isActive={activeView === "projects" || activeView === "project_detail"}
+          isSidebarOpen={isSidebarOpen}
           onClick={() => onNavigate("projects")}
-          style={{ justifyContent: isSidebarOpen ? "flex-start" : "center", padding: isSidebarOpen ? "10px 16px" : "12px", margin: 0 }}
-          title={!isSidebarOpen ? "Projects" : undefined}
-        >
-          <div className="project-item-content" style={{ display: "flex", alignItems: "center", gap: "12px", flexDirection: "row", flex: isSidebarOpen ? 1 : "none" }}>
-            <GridIcon />
-            {isSidebarOpen && <div className="project-item-name">Projects</div>}
-          </div>
-        </li>
-        <li 
-          className={`project-item ${activeView === "test_cases" ? "active" : ""}`}
+          icon={<GridIcon />}
+          label="Projects"
+        />
+        <SidebarNavItem
+          dataTour="nav-test-cases"
+          isActive={activeView === "test_cases"}
+          isSidebarOpen={isSidebarOpen}
           onClick={() => onNavigate("test_cases")}
-          style={{ justifyContent: isSidebarOpen ? "flex-start" : "center", padding: isSidebarOpen ? "10px 16px" : "12px", margin: 0 }}
-          title={!isSidebarOpen ? "Tester Studio" : undefined}
-        >
-          <div className="project-item-content" style={{ display: "flex", alignItems: "center", gap: "12px", flexDirection: "row", flex: isSidebarOpen ? 1 : "none" }}>
-            <ClipboardCheckIcon />
-            {isSidebarOpen && <div className="project-item-name">Tester Studio</div>}
-          </div>
-        </li>
-        <li 
-          className={`project-item ${activeView === "usage" ? "active" : ""}`}
+          icon={<ClipboardCheckIcon />}
+          label="Tester Studio"
+        />
+        <SidebarNavItem
+          dataTour="nav-usage"
+          isActive={activeView === "usage"}
+          isSidebarOpen={isSidebarOpen}
           onClick={() => onNavigate("usage")}
-          style={{ justifyContent: isSidebarOpen ? "flex-start" : "center", padding: isSidebarOpen ? "10px 16px" : "12px", margin: 0 }}
-          title={!isSidebarOpen ? "Usage & Billing" : undefined}
-        >
-          <div className="project-item-content" style={{ display: "flex", alignItems: "center", gap: "12px", flexDirection: "row", flex: isSidebarOpen ? 1 : "none" }}>
-            <BookOpenIcon />
-            {isSidebarOpen && <div className="project-item-name">Usage & Billing</div>}
-          </div>
-        </li>
-        <li 
-          className={`project-item ${activeView === "tutorial" ? "active" : ""}`}
+          icon={<BookOpenIcon />}
+          label="Usage & Billing"
+        />
+        <SidebarNavItem
+          dataTour="nav-tutorial"
+          isActive={activeView === "tutorial"}
+          isSidebarOpen={isSidebarOpen}
           onClick={() => onNavigate("tutorial")}
-          style={{ justifyContent: isSidebarOpen ? "flex-start" : "center", padding: isSidebarOpen ? "10px 16px" : "12px", margin: 0 }}
-          title={!isSidebarOpen ? "Tutorial" : undefined}
-        >
-          <div className="project-item-content" style={{ display: "flex", alignItems: "center", gap: "12px", flexDirection: "row", flex: isSidebarOpen ? 1 : "none" }}>
-            <HelpCircleIcon />
-            {isSidebarOpen && <div className="project-item-name">Tutorial</div>}
-          </div>
-        </li>
+          icon={<HelpCircleIcon />}
+          label="Tutorial"
+        />
       </ul>
 
       {user && (
