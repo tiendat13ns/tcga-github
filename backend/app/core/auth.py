@@ -14,7 +14,16 @@ logger = logging.getLogger(__name__)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "super-secret-jwt-token-with-at-least-32-characters-long")
+# Bắt buộc phải cấu hình — KHÔNG dùng giá trị mặc định. Trước đây có fallback về một chuỗi
+# secret nổi tiếng của Supabase local-dev; nếu quên set env, app chạy với secret rởm và bất
+# kỳ ai biết secret đó cũng giả mạo được token. Fail-fast ngay lúc khởi động để không bao giờ
+# chạy với secret không an toàn.
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+if not SUPABASE_JWT_SECRET:
+    raise RuntimeError(
+        "SUPABASE_JWT_SECRET chưa được cấu hình — bắt buộc để xác minh chữ ký JWT. "
+        "Đặt biến này trong .env trước khi khởi động backend."
+    )
 ALGORITHM = "HS256"
 
 
@@ -33,17 +42,24 @@ def get_current_user_from_token(token: str, db: Session) -> User:
     """
     user_id: UUID | None = None
 
-    # 1. Decode JWT local (không tốn network call)
+    # 1. Decode + XÁC MINH CHỮ KÝ JWT cục bộ (không tốn network call).
+    #    verify_signature và verify_exp mặc định = True → token giả mạo hoặc hết hạn sẽ ném lỗi
+    #    ở đây và rơi xuống fallback Supabase SDK (cũng xác thực server-side) → cuối cùng bị 401.
+    #    Chỉ tắt verify_aud vì token Supabase có aud="authenticated" mà ta không truyền audience.
     try:
         payload = jwt.decode(
             token,
             SUPABASE_JWT_SECRET,
             algorithms=[ALGORITHM],
-            options={"verify_aud": False, "verify_signature": False},
+            options={"verify_aud": False},
         )
         user_id_str = payload.get("sub")
         if user_id_str:
             user_id = UUID(user_id_str)
+    except JWTError as e:
+        # Chữ ký sai / token hết hạn / malformed → thử fallback (phòng trường hợp Supabase ký
+        # bằng thuật toán bất đối xứng mà HS256 cục bộ không verify được).
+        logger.debug("Local JWT verify failed, will try Supabase SDK fallback: %s", e)
     except Exception:
         pass
 

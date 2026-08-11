@@ -14,6 +14,18 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
+# Danh sách email được cấp quyền admin — cấu hình qua env (phân tách bằng dấu phẩy), không
+# hardcode trong logic. Mặc định giữ email admin hiện tại để không đổi hành vi nếu chưa set env.
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.getenv("ADMIN_EMAILS", "dat96133@gmail.com").split(",")
+    if e.strip()
+}
+
+
+def _is_admin_email(email: str | None) -> bool:
+    return bool(email) and email.lower() in ADMIN_EMAILS
+
 # We only create the client if the env vars are present
 supabase: Client | None = None
 if SUPABASE_URL and SUPABASE_KEY:
@@ -64,7 +76,7 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)) -> Any:
         )
 
     # Insert into public.users
-    user_role = "admin" if user_in.email.lower() == "dat96133@gmail.com" else "user"
+    user_role = "admin" if _is_admin_email(user_in.email) else "user"
     initial_credits = 3500 if user_role == "admin" else 300
     new_user = User(
         id=response.user.id,
@@ -111,7 +123,7 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)) -> Any:
     # Ensure user exists in our local DB as well
     user = db.query(User).filter(User.id == response.user.id).first()
     if not user:
-        user_role = "admin" if (response.user.email and response.user.email.lower() == "dat96133@gmail.com") else "user"
+        user_role = "admin" if _is_admin_email(response.user.email) else "user"
         initial_credits = 3500 if user_role == "admin" else 300
         # Fallback in case they were created in supabase but not synced here
         user = User(
@@ -122,7 +134,7 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)) -> Any:
         )
         db.add(user)
         db.commit()
-    elif user.email.lower() == "dat96133@gmail.com":
+    elif _is_admin_email(user.email):
         if user.role != "admin":
             user.role = "admin"
         if user.credit_balance < 3500:

@@ -1,29 +1,15 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_db, require_admin
 from app.models import Document, Project, Requirement, TestCase, UsageLog, User
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-
-class UpdateCreditRequest(BaseModel):
-    credit_balance: int
-
-
-@router.get("/stats")
-def get_admin_stats(
-    db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin),
-) -> Any:
-    """
-    Trả về thống kê tổng quan hệ thống dành cho Admin.
-    """
+def get_admin_stats(db: Session) -> dict[str, int]:
+    """Trả về thống kê tổng quan hệ thống dành cho Admin."""
     total_users = db.query(func.count(User.id)).scalar() or 0
     total_projects = db.query(func.count(Project.id)).scalar() or 0
     total_documents = db.query(func.count(Document.id)).scalar() or 0
@@ -41,11 +27,7 @@ def get_admin_stats(
     }
 
 
-@router.get("/users")
-def get_admin_users(
-    db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin),
-) -> Any:
+def get_admin_users(db: Session) -> list[dict[str, Any]]:
     """
     Lấy danh sách người dùng kèm theo thông tin chi tiết:
     - số dư credit
@@ -110,16 +92,8 @@ def get_admin_users(
     return results
 
 
-@router.patch("/users/{user_id}/credits")
-def update_user_credits(
-    user_id: UUID,
-    payload: UpdateCreditRequest,
-    db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin),
-) -> Any:
-    """
-    Cập nhật số dư credit cho một người dùng bất kỳ.
-    """
+def update_user_credits(db: Session, user_id: UUID, credit_balance: int) -> dict[str, Any]:
+    """Cập nhật số dư credit cho một người dùng bất kỳ."""
     target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
         raise HTTPException(
@@ -127,13 +101,13 @@ def update_user_credits(
             detail="User not found",
         )
 
-    if payload.credit_balance < 0:
+    if credit_balance < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Credit balance cannot be negative",
         )
 
-    target_user.credit_balance = payload.credit_balance
+    target_user.credit_balance = credit_balance
     db.commit()
     db.refresh(target_user)
 

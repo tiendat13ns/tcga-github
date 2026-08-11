@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Project } from "../components/Projects/ProjectManager";
 import { useProjects } from "./useProjects";
 
@@ -106,6 +106,21 @@ export function useAppRouter(isAuthenticated: boolean, user: AuthedUser) {
       }
     }
   }, [isAuthenticated, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Guard: user KHÔNG phải admin thì không được ở view "admin" ──
+  // Bất kể vào bằng cách nào (gõ URL trực tiếp, back/forward, deep-link), non-admin ở activeView
+  // "admin" sẽ bị lặng lẽ đưa về /overview — KHÔNG hiện cảnh báo "không có quyền", và dùng
+  // replaceState để /admin không nằm trong lịch sử → không lộ cho người dùng biết route admin
+  // tồn tại (giảm bề mặt bị dò tìm lỗ hổng). useLayoutEffect để đổi view TRƯỚC khi trình duyệt
+  // vẽ → không nháy thoáng màn hình admin/trống.
+  useLayoutEffect(() => {
+    if (!isAuthenticated || !user) return;
+    if (activeView === "admin" && user.role !== "admin") {
+      setActiveView("overview");
+      setPathname("/overview");
+      window.history.replaceState(null, "", "/overview");
+    }
+  }, [activeView, isAuthenticated, user]);
 
   // TesterStudio tự quản lý view nội bộ (projects/documents/testcases) tách biệt với router này.
   // Bấm "Tester Studio" ở sidebar trong khi đang ở sâu bên trong nó không đổi activeView (đã là

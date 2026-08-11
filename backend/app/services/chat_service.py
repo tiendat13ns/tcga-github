@@ -270,15 +270,20 @@ async def _agent_response(request: ChatRequest) -> str:
 
     # Tool trả về Markdown đã format sẵn (bảng requirement/test case). Chế độ non-streaming
     # không có kênh riêng để đẩy bảng lên UI như luồng SSE, nên phải ghép vào response ở đây.
+    # Chỉ 2 tool user-facing (xem giải thích ở stream_chat_message) mới được ghép vào response —
+    # các tool nội bộ khác không hiện cho người dùng. So khớp CHÍNH XÁC tên tool để tránh bug cũ
+    # trừ nhầm credit REQUIREMENT_EXTRACTION cho list_requirements_tool/update_requirement_tool.
     tool_outputs: list[str] = []
     for msg in messages:
         if isinstance(msg, ToolMessage) and msg.content:
             tool_name = getattr(msg, "name", "") or ""
-            if "generate_test_case" in tool_name:
+            if tool_name == "generate_test_case_tool":
                 _deduct_credits_for_request(request, "TEST_CASE_GENERATION")
-            elif "extract_requirement" in tool_name or "requirement" in tool_name.lower():
+            elif tool_name == "extract_requirement_tool":
                 _deduct_credits_for_request(request, "REQUIREMENT_EXTRACTION")
-            tool_outputs.append(str(msg.content))
+
+            if tool_name in ("generate_test_case_tool", "extract_requirement_tool"):
+                tool_outputs.append(str(msg.content))
 
     final_text = ""
     if messages and isinstance(messages[-1], AIMessage):
@@ -416,48 +421,65 @@ async def stream_chat_message(request: ChatRequest):
             )
             history.append(HumanMessage(content=request.message + context_instruction))
 
-            think_filter = _ThinkStreamFilter()
             agent = get_chat_agent()
+            # Buffer text tự thuật của agent thay vì đẩy thẳng lên UI. Agent (ReAct) hay tự thuật
+            # kế hoạch giữa các bước ("Lấy danh sách requirements trước...", "tiến hành tạo test
+            # case...") — đây là suy nghĩ nội bộ, KHÔNG nên hiện cho user; nếu đẩy ngay còn bị khối
+            # tool output chèn vào giữa, cắt xé câu chữ.
+            # Quy tắc: text thuộc lượt CÓ gọi tool = planning → bỏ; chỉ text của lượt trả lời CUỐI
+            # (không kèm tool call) mới là câu chốt → flush 1 lần khi stream kết thúc.
+            agent_text_buf: list[str] = []
             async for event in agent.astream({"messages": history}, stream_mode="messages"):
                 # event = (chunk, metadata) khi stream_mode="messages"
                 chunk, _meta = event if isinstance(event, tuple) else (event, {})
 
-                # Stream kết quả trực tiếp từ Tool (Bảng Markdown) lên UI luôn
+                # Chỉ 2 tool này được thiết kế để stream kết quả trực tiếp lên UI cho người
+                # dùng xem (xem SYSTEM_PROMPT trong chat_prompt.py) — các tool nội bộ khác
+                # (list_requirements_tool, search_documents_tool, update_requirement_tool) chỉ
+                # phục vụ agent tự suy luận/chuỗi sang tool call tiếp theo (vd lấy requirement_id
+                # để gọi generate_test_case_tool), KHÔNG nên lộ ra màn hình chat (chứa UUID thô,
+                # gây khó hiểu cho người dùng).
                 from langchain_core.messages import ToolMessage, ToolMessageChunk
                 if isinstance(chunk, (ToolMessage, ToolMessageChunk)) and chunk.content:
-                    # Trừ credit dựa theo tool đã chạy
+                    # Có tool chạy → text agent tích luỹ trước đó là planning của lượt hành động
+                    # này → bỏ đi để không lộ và không bị chèn vào giữa tool output.
+                    agent_text_buf.clear()
                     tool_name = getattr(chunk, "name", "") or ""
-                    if "generate_test_case" in tool_name:
+                    # So khớp CHÍNH XÁC tên tool — tránh bug cũ: "requirement" in tool_name.lower()
+                    # khớp nhầm cả list_requirements_tool/update_requirement_tool (không gọi LLM,
+                    # đáng lẽ miễn phí) khiến user bị trừ oan credit REQUIREMENT_EXTRACTION.
+                    if tool_name == "generate_test_case_tool":
                         _deduct_credits_for_request(request, "TEST_CASE_GENERATION")
-                    elif "extract_requirement" in tool_name or "requirement" in tool_name.lower():
+                    elif tool_name == "extract_requirement_tool":
                         _deduct_credits_for_request(request, "REQUIREMENT_EXTRACTION")
 
-                    text = chunk.content
-                    # Thêm khoảng trắng để tách biệt với các câu chữ khác
-                    full_response_parts.append(f"\n\n{text}\n\n")
-                    payload = json.dumps({"chunk": f"\n\n{text}\n\n"}, ensure_ascii=False)
-                    yield f"data: {payload}\n\n"
+                    if tool_name in ("generate_test_case_tool", "extract_requirement_tool"):
+                        text = chunk.content
+                        # Thêm khoảng trắng để tách biệt với các câu chữ khác
+                        full_response_parts.append(f"\n\n{text}\n\n")
+                        payload = json.dumps({"chunk": f"\n\n{text}\n\n"}, ensure_ascii=False)
+                        yield f"data: {payload}\n\n"
                     continue
 
-                # Chỉ stream những text được sinh ra từ chính Agent (bỏ qua text sinh từ các LLM lồng bên trong Tool)
+                # Chỉ xét text sinh từ chính node agent (bỏ text sinh từ LLM lồng bên trong tool)
                 if _meta.get("langgraph_node") != "agent":
                     continue
 
-                if isinstance(chunk, AIMessageChunk) and chunk.content:
-                    # Nếu chunk này là đang sinh arguments cho một Tool (Tool Call) -> Bỏ qua
+                if isinstance(chunk, AIMessageChunk):
+                    # Chunk đang sinh arguments cho một tool call → lượt này là hành động, không
+                    # phải câu trả lời cuối → xoá text đã buffer của lượt này.
                     if getattr(chunk, "tool_call_chunks", None):
+                        agent_text_buf.clear()
                         continue
+                    if chunk.content:
+                        agent_text_buf.append(chunk.content)
 
-                    text = think_filter.feed(chunk.content)
-                    if text:
-                        full_response_parts.append(text)
-                        payload = json.dumps({"chunk": text}, ensure_ascii=False)
-                        yield f"data: {payload}\n\n"
-
-            tail = think_filter.flush()
-            if tail:
-                full_response_parts.append(tail)
-                payload = json.dumps({"chunk": tail}, ensure_ascii=False)
+            # Kết thúc stream: phần còn lại trong buffer là câu chốt của lượt trả lời cuối (lượt
+            # không gọi tool). Lọc <think> rồi đẩy 1 lần — tránh chèn vào giữa các khối tool output.
+            final_text = _strip_reasoning_block("".join(agent_text_buf)).strip()
+            if final_text:
+                full_response_parts.append(final_text)
+                payload = json.dumps({"chunk": final_text}, ensure_ascii=False)
                 yield f"data: {payload}\n\n"
 
         # ── Nhánh FAST (general_chat / small_talk): stream trực tiếp LLM ─────

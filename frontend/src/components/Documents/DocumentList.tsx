@@ -2,10 +2,20 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import type { DocumentItem } from "../../App";
 import type { GenerateRequirementsResponse } from "../RequirementViewer";
 import { useProjectDocuments, useDeleteDocument, useClearDocuments, useAddDocumentsToCache } from "../../hooks/useDocuments";
+import { useAuth } from "../../contexts/AuthContext";
 import ConfirmDialog from "../ConfirmDialog";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const API_V1_DOCUMENTS_URL = `${API_BASE}/api/v1/documents`;
+const API_V1_REQUIREMENTS_URL = `${API_BASE}/api/v1/requirements`;
+
+// Các endpoint sinh requirement/test case giờ yêu cầu đăng nhập + trừ credit → phải gửi token.
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const token = localStorage.getItem("tcga_token");
+  const headers: Record<string, string> = { ...extra };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
 
 type DocumentListProps = {
   projectId: string | null;
@@ -49,9 +59,13 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
   const deleteDocMutation = useDeleteDocument(projectId);
   const clearDocsMutation = useClearDocuments(projectId);
   const addToCache = useAddDocumentsToCache(projectId);
+  const { refreshUser } = useAuth();  // để cập nhật số credit ở sidebar sau khi generate (bị trừ credit)
 
   const [message, setMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [generatingRequirementsId, setGeneratingRequirementsId] = useState<string | null>(null);
+  const [generatingTestCasesId, setGeneratingTestCasesId] = useState<string | null>(null);
+  const [tcProgress, setTcProgress] = useState<{ done: number; total: number } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [existingRequirements, setExistingRequirements] = useState<Record<string, GenerateRequirementsResponse | null>>({});
@@ -123,13 +137,44 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
   const generateRequirements = async (doc: DocumentItem) => {
     setGeneratingRequirementsId(doc.id); setMessage("");
     try {
-      const r = await fetch(`${API_V1_DOCUMENTS_URL}/${doc.id}/requirements/generate`, { method: "POST" });
+      const r = await fetch(`${API_V1_DOCUMENTS_URL}/${doc.id}/requirements/generate`, { method: "POST", headers: authHeaders() });
       const d = await r.json().catch(() => null);
       if (!r.ok) throw new Error(d?.detail || "Could not generate requirements.");
       setExistingRequirements((prev) => ({ ...prev, [doc.id]: d }));
+      refreshUser();  // credit vừa bị trừ → cập nhật lại số hiển thị ở sidebar
       onViewRequirements(d, doc);
     } catch (e) { setMessage(e instanceof Error ? e.message : "Cannot connect to backend."); }
     finally { setGeneratingRequirementsId(null); }
+  };
+
+  // Sinh test case cho TẤT CẢ requirement của document — gọi tuần tự endpoint sinh test case
+  // theo từng requirement (backend chưa có endpoint gộp theo document). Hiện tiến độ n/tổng để
+  // người dùng biết đang chạy tới đâu (mỗi requirement là 1 lời gọi LLM, có thể chậm).
+  const generateTestCases = async (doc: DocumentItem) => {
+    const reqs = existingRequirements[doc.id];
+    if (!reqs || reqs.requirements.length === 0) return;
+    setGeneratingTestCasesId(doc.id); setMessage(""); setSuccessMessage("");
+    setTcProgress({ done: 0, total: reqs.requirements.length });
+    try {
+      let done = 0;
+      for (const req of reqs.requirements) {
+        const r = await fetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases/generate`, { method: "POST", headers: authHeaders() });
+        if (!r.ok) {
+          const d = await r.json().catch(() => null);
+          throw new Error(d?.detail || `Không sinh được test case cho requirement "${req.title}".`);
+        }
+        done += 1;
+        setTcProgress({ done, total: reqs.requirements.length });
+      }
+      setSuccessMessage(`Đã sinh test case cho ${done} requirement. Mở Tester Studio để xem chi tiết.`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Cannot connect to backend.");
+    } finally {
+      // credit đã bị trừ theo từng requirement thành công → cập nhật lại sidebar dù có lỗi giữa chừng.
+      refreshUser();
+      setGeneratingTestCasesId(null);
+      setTcProgress(null);
+    }
   };
 
   const confirmDeleteDocument = () => {
@@ -203,6 +248,13 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
         </div>
       )}
 
+      {/* Success (vd sinh test case xong) */}
+      {successMessage && (
+        <div className="msg" style={{ margin: "0 14px", display: "flex", alignItems: "center", gap: "6px", background: "color-mix(in srgb, var(--success) 12%, transparent)", color: "var(--success)", border: "1px solid color-mix(in srgb, var(--success) 30%, transparent)" }}>
+          {successMessage}
+        </div>
+      )}
+
       {/* Loading */}
       {isLoading && (
         <div style={{ padding: "14px", display: "grid", gap: "6px" }}>
@@ -267,17 +319,28 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
                     <>
                       <button
                         type="button"
-                        className="btn btn-primary"
+                        className="btn btn-secondary"
                         onClick={() => onViewRequirements(existingRequirements[doc.id]!, doc)}
                       >
                         <EyeIcon /> View Req
                       </button>
                       <button
                         type="button"
+                        className="btn btn-primary"
+                        disabled={generatingTestCasesId === doc.id}
+                        onClick={() => generateTestCases(doc)}
+                        title="Sinh test case cho tất cả requirement của tài liệu này"
+                      >
+                        {generatingTestCasesId === doc.id
+                          ? <><SpinnerIcon /> TCs {tcProgress ? `${tcProgress.done}/${tcProgress.total}` : "..."}</>
+                          : <><ZapIcon /> Generate TCs</>}
+                      </button>
+                      <button
+                        type="button"
                         className="btn btn-secondary"
                         disabled={isGenerating}
                         onClick={() => generateRequirements(doc)}
-                        title="Re-generate"
+                        title="Re-generate requirements"
                       >
                         {isGenerating ? <SpinnerIcon /> : <RefreshIcon />}
                       </button>

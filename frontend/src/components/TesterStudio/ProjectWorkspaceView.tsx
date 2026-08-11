@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Sparkles } from "lucide-react";
 import { Project } from "../Projects/ProjectManager";
 import { DocumentItem } from "../../App";
@@ -7,6 +8,16 @@ import {
   formatFileSize, parseBugReport, timeAgo,
 } from "./shared";
 import type { ExecutionSummary, StudioTestCaseItem } from "./shared";
+
+// Ưu tiên hiển thị test case chưa chạy theo độ ưu tiên: High → Medium → Low (thứ đáng test
+// trước luôn nổi lên đầu cột, không phải cuộn tìm).
+const PRIORITY_RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+const byPriority = (a: StudioTestCaseItem, b: StudioTestCaseItem) =>
+  (PRIORITY_RANK[a.priority] ?? 99) - (PRIORITY_RANK[b.priority] ?? 99);
+
+// Chiều cao tối đa cho danh sách mỗi cột — vượt quá thì cuộn riêng trong cột, giữ trang gọn
+// và 3 cột thẳng hàng (thay vì cả trang dài theo cột nhiều item nhất).
+const COLUMN_LIST_MAX_HEIGHT = "calc(100vh - 300px)";
 
 type ProjectWorkspaceViewProps = {
   selectedProject: Project | null;
@@ -58,6 +69,11 @@ export default function ProjectWorkspaceView({
   onGoToTestCases,
   onOpenBugReportDrawer,
 }: ProjectWorkspaceViewProps) {
+  const sortedUntested = useMemo(
+    () => [...filteredUntestedCases].sort(byPriority),
+    [filteredUntestedCases],
+  );
+
   return (
     <div className="tcs-view">
       <div className="tcs-view-header">
@@ -126,7 +142,7 @@ export default function ProjectWorkspaceView({
             ) : filteredDocuments.length === 0 ? (
               <div style={{ fontSize: "12px", color: "var(--text-muted)", padding: "12px 4px" }}>No documents match your search.</div>
             ) : (
-              <div className="tcs-doc-list" style={{ padding: 0 }}>
+              <div className="tcs-doc-list" style={{ padding: 0, maxHeight: COLUMN_LIST_MAX_HEIGHT, overflowY: "auto", paddingRight: "4px" }}>
                 {filteredDocuments.map((doc: DocumentItem) => (
                   <div key={doc.id} className="tcs-doc-row">
                     <div className="tcs-doc-row-icon">
@@ -172,7 +188,7 @@ export default function ProjectWorkspaceView({
                 {filteredBugReports.length === 0 ? (
                   <div style={{ fontSize: "12px", color: "var(--text-muted)", padding: "12px 4px" }}>No bug reports match your search.</div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: COLUMN_LIST_MAX_HEIGHT, overflowY: "auto", paddingRight: "4px" }}>
                     {filteredBugReports.map((tc: StudioTestCaseItem) => {
                       const fields = parseBugReport(tc.actual_result);
                       const docName = documents.find((d: DocumentItem) => d.id === tc.document_id)?.original_filename;
@@ -182,8 +198,8 @@ export default function ProjectWorkspaceView({
                           title={tc.title}
                           onClick={() => onOpenBugReportDrawer(tc)}
                           style={{
-                            display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "6px",
-                            padding: "10px 14px", borderRadius: "8px", minHeight: "92px",
+                            display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "5px",
+                            padding: "8px 12px", borderRadius: "8px",
                             border: "1px solid var(--border)", background: "var(--bg-surface)",
                             cursor: "pointer", transition: "border-color var(--transition)",
                           }}
@@ -236,8 +252,8 @@ export default function ProjectWorkspaceView({
                 {filteredUntestedCases.length === 0 ? (
                   <div style={{ fontSize: "12px", color: "var(--text-muted)", padding: "12px 4px" }}>No untested cases match your search.</div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {filteredUntestedCases.map((tc: StudioTestCaseItem) => {
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: COLUMN_LIST_MAX_HEIGHT, overflowY: "auto", paddingRight: "4px" }}>
+                    {sortedUntested.map((tc: StudioTestCaseItem) => {
                       const doc = documents.find((d: DocumentItem) => d.id === tc.document_id);
                       return (
                         <div
@@ -245,8 +261,8 @@ export default function ProjectWorkspaceView({
                           title={tc.title}
                           onClick={() => doc && onGoToTestCases(doc)}
                           style={{
-                            display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "6px",
-                            padding: "10px 14px", borderRadius: "8px", minHeight: "92px",
+                            display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "5px",
+                            padding: "8px 12px", borderRadius: "8px",
                             border: "1px solid var(--border)", background: "var(--bg-surface)",
                             cursor: doc ? "pointer" : "default", transition: "border-color var(--transition)",
                           }}

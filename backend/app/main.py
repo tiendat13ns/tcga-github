@@ -31,7 +31,7 @@ from app.routers.chat import router as chat_router
 from app.routers.test_case_studio import router as test_case_studio_router
 from app.routers.auth import router as auth_router
 from app.routers.usage import router as usage_router
-from app.routers.admin import router as admin_router
+from app.admin.router import router as admin_router
 
 app = FastAPI(title="AI Test Case Generation Assistant")
 

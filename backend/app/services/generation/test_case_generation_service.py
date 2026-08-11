@@ -14,6 +14,7 @@ Luồng generate_test_cases_from_requirement():
 """
 
 import logging
+import os
 import time
 from datetime import datetime
 from uuid import UUID
@@ -140,12 +141,52 @@ async def generate_test_cases_from_requirement(requirement_id: str) -> GenerateT
 
     try:
         from app.prompts.test_case_generation_prompt import build_user_prompt
-        user_prompt = build_user_prompt(requirement, document_context)
-        
-        # Gọi Workflow Agent với Structured Output
-        result = await generate_test_cases_node(user_prompt, requirement_id)
+
+        # Sinh test case theo BATCH để đạt ~20-25 case mà mỗi lời gọi vẫn dưới trần token (~10K)
+        # của model → không cắt cụt. Mỗi batch sinh ~≤12 case; batch sau nhận danh sách title đã
+        # sinh để tạo case KHÁC, bổ sung (adaptive: requirement đơn giản thì batch sau trả ít/rỗng).
+        # Số batch chỉnh qua TEST_CASE_BATCHES (mặc định 2 → ~24 case tối đa).
+        num_batches = max(1, int(os.getenv("TEST_CASE_BATCHES", "2")))
+        all_items: list = []
+        seen_titles: set[str] = set()
+
+        for batch_idx in range(num_batches):
+            exclude = list(seen_titles) if batch_idx > 0 else None
+            user_prompt = build_user_prompt(requirement, document_context, exclude_titles=exclude)
+            try:
+                result = await generate_test_cases_node(user_prompt, requirement_id)
+            except Exception as batch_exc:
+                if batch_idx == 0:
+                    raise  # batch đầu bắt buộc phải thành công
+                # Batch bổ sung là best-effort — lỗi thì vẫn lưu những gì đã có.
+                logger.warning(
+                    "Batch %d/%d sinh test case thất bại (%s) — dùng %d case đã có.",
+                    batch_idx + 1, num_batches, batch_exc, len(all_items),
+                )
+                break
+
+            added = 0
+            for item in result.test_cases:
+                key = (item.title or "").strip().lower()
+                if key and key in seen_titles:
+                    continue  # loại case trùng title giữa các batch
+                if key:
+                    seen_titles.add(key)
+                all_items.append(item)
+                added += 1
+            logger.info(
+                "Batch %d/%d: thêm %d test case mới (tổng %d).",
+                batch_idx + 1, num_batches, added, len(all_items),
+            )
+            # Batch bổ sung không thêm được case mới nào → hết đất → dừng sớm, khỏi tốn lời gọi.
+            if batch_idx > 0 and added == 0:
+                break
+
         execution_time_ms = int((time.perf_counter() - started_at) * 1000)
-        logger.info("Agent generate_test_cases completed in %d ms", execution_time_ms)
+        logger.info(
+            "Agent generate_test_cases completed in %d ms — %d test cases",
+            execution_time_ms, len(all_items),
+        )
     except Exception as exc:
         error_message = str(exc)
         raise TestCaseGenerationAIError(error_message) from exc
@@ -174,7 +215,7 @@ async def generate_test_cases_from_requirement(requirement_id: str) -> GenerateT
                     version=version,
                     updated_at=datetime.now(),
                 )
-                for item in result.test_cases
+                for item in all_items
             ]
 
             saved = repository.create_many(test_cases)

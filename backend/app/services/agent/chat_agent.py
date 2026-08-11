@@ -8,25 +8,30 @@ extract_requirement_tool, list_requirements_tool, generate_test_case_tool. Các 
 nội dung (extract_requirement_tool, generate_test_case_tool) gọi ngược lại xuống
 services/generation/ — module này KHÔNG tự gọi LLM để sinh JSON, chỉ điều phối tool.
 
-_format_test_cases_as_markdown_table format sẵn kết quả thành bảng Markdown ngay trong
-tool, để agent LLM không cần (và bị cấm — xem chat_prompt.py) tóm tắt/sinh lại nội dung,
-tránh tốn token và tránh AI diễn giải sai số liệu.
+_format_test_cases_summary trả về tóm tắt ngắn (số lượng + vài test case đầu) kèm deep-link
+sang Tester Studio (`/test-cases?project_id=...`) thay vì bảng Markdown đầy đủ 7 cột — bảng
+đầy đủ quá khổ so với khung chat. Agent LLM không cần (và bị cấm — xem chat_prompt.py)
+tóm tắt/sinh lại nội dung, tránh tốn token và tránh AI diễn giải sai số liệu.
 """
 
 import logging
 from typing import List, Dict
 
+# Số test case xem trước trực tiếp trong chat trước khi dẫn link sang Tester Studio.
+_PREVIEW_COUNT = 3
 
-def _format_test_cases_as_markdown_table(req_id: str, res) -> str:
+
+def _format_test_cases_summary(req_id: str, res) -> str:
     """
-    Build bảng Markdown đầy đủ 6 cột theo yêu cầu:
-    TC ID | Mục đích kiểm thử | Pre-condition | Các bước thực hiện | Test Data | Kết quả mong muốn
+    Tóm tắt ngắn gọn: tổng số lượng + vài test case đầu (chỉ tên + loại/priority),
+    kèm link deep-link sang Tester Studio để xem/sửa đầy đủ.
     """
     tc_list = res.test_cases
     total = res.total_test_cases
 
-    # Fetch requirement info to populate Feature column
+    # Fetch requirement info để lấy project_id cho deep-link + feature name.
     req_feature_name = ""
+    project_id = None
     try:
         from uuid import UUID
         from app.database import SessionLocal
@@ -35,44 +40,36 @@ def _format_test_cases_as_markdown_table(req_id: str, res) -> str:
             req = db.get(Requirement, UUID(req_id))
             if req:
                 req_feature_name = req.feature_name or req.title or ""
+                project_id = req.project_id
     except Exception:
         pass
 
     lines = []
-    lines.append(f"**Tổng hợp {total} Test Case** cho Requirement `{req_id}`\n")
+    header = f"**Đã tạo xong {total} Test Case**"
+    if req_feature_name:
+        header += f" cho *{req_feature_name}*"
+    lines.append(header + "\n")
 
-    # Header bảng
-    lines.append("| Feature | Test Case ID | Test Item | Precondition | Test Steps | Test Data | Expected Output |")
-    lines.append("|---------|--------------|-----------|--------------|------------|-----------|-----------------|")
-
-    for i, tc in enumerate(tc_list, start=1):
-        tc_id = f"TC-{i:02d}"
-
-        # Feature: Get from test case if present, else fallback to requirement title/feature_name
-        feature = getattr(tc, 'feature_name', None) or req_feature_name
-        
-        # Test Item = title + (test_type, priority)
-        title = (tc.title or "").replace("|", "/").replace("\n", " ")
+    for i, tc in enumerate(tc_list[:_PREVIEW_COUNT], start=1):
+        title = (tc.title or "").strip()
         test_type = tc.test_type or ""
         priority = tc.priority or ""
-        test_item = f"{title}<br/>*({test_type} · {priority})*" if test_type or priority else title
+        meta = " · ".join(p for p in (test_type, priority) if p)
+        line = f" - TC-{i:02d}: {title}"
+        if meta:
+            line += f" ({meta})"
+        lines.append(line)
 
-        # Precondition
-        precond = (tc.preconditions or "").replace("|", "/").replace("\n", " ")
+    remaining = total - min(_PREVIEW_COUNT, len(tc_list))
+    if remaining > 0:
+        lines.append(f" - ... và {remaining} test case khác")
 
-        # Test steps
-        steps = tc.test_steps or []
-        steps_str = "<br/>".join(f"{j}. {s.replace('|', '/').replace(chr(10), ' ')}" for j, s in enumerate(steps, start=1))
-        if not steps_str:
-            steps_str = "(none)"
-
-        # Test data
-        test_data = (tc.test_data or "").replace("|", "/").replace("\n", " ")
-
-        # Expected result
-        expected = (tc.expected_result or "").replace("|", "/").replace("\n", " ")
-        
-        lines.append(f"| {feature} | {tc_id} | {test_item} | {precond} | {steps_str} | {test_data} | {expected} |")
+    link = "/test-cases"
+    if project_id:
+        link += f"?project_id={project_id}"
+    # Link được frontend style thành nút pill qua CSS `.markdown-body a[href^="/test-cases"]`
+    # (kèm icon mũi tên), nên không cần emoji thủ công ở đây.
+    lines.append(f"\n[Xem đầy đủ trong Tester Studio]({link})")
 
     return "\n".join(lines)
 
@@ -170,11 +167,24 @@ async def extract_requirement_tool(document_ids: List[str]) -> str:
     try:
         for doc_id in document_ids:
             res = await generate_requirements_from_document(doc_id)
-            
-            lines = [f"### 📋 Requirements trích xuất từ tài liệu `{doc_id}`\n"]
+
+            # Hiện tên file thay vì UUID thô cho dễ đọc — UUID không có ý nghĩa với người
+            # dùng cuối; ID thật vẫn được agent lấy lại qua list_requirements_tool khi cần.
+            doc_label = doc_id
+            try:
+                from uuid import UUID
+                from app.database import SessionLocal as _SessionLocal
+                from app.models import Document as _Document
+                with _SessionLocal() as _db:
+                    _doc = _db.get(_Document, UUID(doc_id))
+                    if _doc and _doc.original_filename:
+                        doc_label = _doc.original_filename
+            except Exception:
+                pass
+
+            lines = [f"### 📋 Requirements trích xuất từ tài liệu `{doc_label}`\n"]
             for i, req in enumerate(res.requirements, start=1):
                 lines.append(f"#### {i}. {req.title}")
-                lines.append(f"**ID:** `{req.id}`")
                 lines.append(f"**Mô tả:** {req.description}")
                 
                 if req.functional_requirement and req.functional_requirement != req.description:
@@ -250,8 +260,8 @@ async def generate_test_case_tool(requirement_ids: List[str]) -> str:
     """
     Sử dụng tool này khi người dùng yêu cầu tạo Test Case từ Requirement.
     Nó sẽ sinh Test Case (tuân thủ ISTQB) và lưu vào cơ sở dữ liệu.
-    Kết quả trả về ĐÃ ĐƯỢC FORMAT SẴN thành Markdown table — KHÔNG cần xử lý hay format lại.
-    Chỉ cần hiển thị nguyên văn kết quả này cho người dùng.
+    Kết quả trả về ĐÃ ĐƯỢC FORMAT SẴN thành tóm tắt ngắn kèm link Tester Studio —
+    KHÔNG cần xử lý hay format lại. Chỉ cần hiển thị nguyên văn kết quả này cho người dùng.
 
     Args:
         requirement_ids: Danh sách ID của các Requirement cần tạo Test Case.
@@ -262,9 +272,9 @@ async def generate_test_case_tool(requirement_ids: List[str]) -> str:
         for req_id in requirement_ids:
             from app.services.generation.test_case_generation_service import generate_test_cases_from_requirement
             res = await generate_test_cases_from_requirement(req_id)
-            # Format thành Markdown table ngay tại đây — AI không cần xử lý thêm
-            markdown_output = _format_test_cases_as_markdown_table(req_id, res)
-            results.append(markdown_output)
+            # Tóm tắt ngắn + deep-link ngay tại đây — AI không cần xử lý thêm
+            summary_output = _format_test_cases_summary(req_id, res)
+            results.append(summary_output)
         return "\n\n".join(results)
     except Exception as e:
         logger.error(f"Error in generate_test_case_tool: {e}")

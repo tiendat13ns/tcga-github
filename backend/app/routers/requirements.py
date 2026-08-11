@@ -1,13 +1,18 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.auth import get_current_user, get_db
 from app.database import SessionLocal, is_database_configured
-from app.models import Requirement
+from app.models import Document, Project, Requirement, User
 from app.schemas.requirement_schema import (
     GenerateRequirementsResponse,
     ListRequirementsResponse,
     RequirementResponse,
 )
+from app.services.credit_service import CREDIT_COST, deduct_user_credits
 from app.services.generation.requirement_generation_service import (
     RequirementGenerationError,
     generate_requirements_from_document,
@@ -21,12 +26,43 @@ class SubmitAnswersRequest(BaseModel):
     answers: list[str]
 
 
-@router.post("/documents/{document_id}/requirements/generate", response_model=GenerateRequirementsResponse)
-async def generate_document_requirements(document_id: str):
+def _verify_document_owner(db: Session, document_id: str, user: User) -> None:
+    """Đảm bảo document thuộc project của chính user đang đăng nhập (chặn thao tác chéo tài khoản)."""
     try:
-        return await generate_requirements_from_document(document_id)
+        doc_uuid = UUID(document_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    doc = db.get(Document, doc_uuid)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if doc.project_id is None:
+        raise HTTPException(status_code=403, detail="Không xác định được chủ sở hữu tài liệu.")
+    project = db.get(Project, doc.project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền trên tài liệu này.")
+
+
+@router.post("/documents/{document_id}/requirements/generate", response_model=GenerateRequirementsResponse)
+async def generate_document_requirements(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _verify_document_owner(db, document_id, current_user)
+    # Chặn sớm nếu không đủ credit — tránh gọi LLM tốn kém rồi mới báo thiếu.
+    cost = CREDIT_COST.get("REQUIREMENT_EXTRACTION", 0)
+    if current_user.credit_balance < cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Không đủ Credit. Cần {cost} Credits nhưng chỉ còn {current_user.credit_balance}.",
+        )
+    try:
+        result = await generate_requirements_from_document(document_id)
     except RequirementGenerationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    # Chỉ trừ credit khi sinh thành công (nhất quán với luồng chat).
+    deduct_user_credits(db, current_user, "REQUIREMENT_EXTRACTION")
+    return result
 
 
 @router.get("/documents/{document_id}/requirements", response_model=ListRequirementsResponse)

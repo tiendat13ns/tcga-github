@@ -34,7 +34,7 @@ class AITestCaseItem(BaseModel):
     expected_result: str = Field(..., description="Kết quả mong đợi (Expected Result)")
     priority: str = Field("Medium", description="Độ ưu tiên: High, Medium, Low")
     severity: Optional[str] = Field(None, description="Mức độ nghiêm trọng: Critical, Major, Minor, Trivial")
-    test_type: Optional[str] = Field(None, description="Loại Test (black-box only, không bao gồm security/performance/white-box): Positive, Negative, Boundary, Validation, Integration, Other")
+    test_type: Optional[str] = Field(None, description="Loại Test (black-box only, không bao gồm security/performance/white-box): Positive, Negative, Boundary, Validation, Permission, State Transition, Integration, Other")
     automation_candidate: bool = Field(False, description="Có thể tự động hoá hay không (True/False)")
     execution_type: str = Field("Manual", description="Loại thực thi: Manual hoặc Automation Candidate")
 

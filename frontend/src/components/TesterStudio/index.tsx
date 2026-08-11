@@ -28,16 +28,18 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
   const [filterPriority, setFilterPriority] = useState("");
   const [filterTestType, setFilterTestType] = useState("");
 
-  // Bulk Editing
-  const [isGlobalEditing, setIsGlobalEditing] = useState(false);
+  // Editing — scoped theo từng nhóm requirement (chỉ 1 nhóm được sửa tại 1 thời điểm).
+  const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
   const [draftTestCases, setDraftTestCases] = useState<Record<string, Partial<StudioTestCaseItem>>>({});
   const [isBulkSaving, setIsBulkSaving] = useState(false);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Add Manual Row
-  const [isAddingRow, setIsAddingRow] = useState(false);
+  // Add Manual Row — scoped theo từng nhóm requirement; addingRequirementId là requirement
+  // của nhóm đang thêm, để gắn khóa ngoại đúng cho test case mới.
+  const [addingGroupKey, setAddingGroupKey] = useState<string | null>(null);
+  const [addingRequirementId, setAddingRequirementId] = useState<string | null>(null);
   const [newRowDraft, setNewRowDraft] = useState<Partial<StudioTestCaseItem>>({ priority: "Medium", status: "draft", execution_status: "Untested", execution_type: "Manual" });
 
   // Bug Report Drawer
@@ -177,7 +179,8 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
     setSelectedDocument(doc);
     setFilterPriority("");
     setFilterTestType("");
-    setIsGlobalEditing(false);
+    setEditingGroupKey(null);
+    setAddingGroupKey(null);
     setDraftTestCases({});
     setView("testcases");
   };
@@ -190,7 +193,8 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
 
   const goBackToDocuments = () => {
     setSelectedDocument(null);
-    setIsGlobalEditing(false);
+    setEditingGroupKey(null);
+    setAddingGroupKey(null);
     setDraftTestCases({});
     setView("documents");
   };
@@ -201,14 +205,26 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const startGlobalEditing = () => {
-    setIsGlobalEditing(true);
+  const startGroupEditing = (groupKey: string) => {
+    setAddingGroupKey(null);        // không sửa và thêm cùng lúc
+    setEditingGroupKey(groupKey);
     setDraftTestCases({});
   };
 
-  const cancelGlobalEditing = () => {
-    setIsGlobalEditing(false);
+  const cancelGroupEditing = () => {
+    setEditingGroupKey(null);
     setDraftTestCases({});
+  };
+
+  const startAddRow = (groupKey: string, requirementId: string) => {
+    setEditingGroupKey(null);       // không sửa và thêm cùng lúc
+    setAddingGroupKey(groupKey);
+    setAddingRequirementId(requirementId);
+    setNewRowDraft({ priority: "Medium", status: "draft", execution_status: "Untested", execution_type: "Manual" });
+  };
+
+  const cancelAddRow = () => {
+    setAddingGroupKey(null);
   };
 
   const handleDraftChange = (id: string, field: keyof StudioTestCaseItem, value: any) => {
@@ -224,7 +240,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
   const saveBulkEditing = async () => {
     const modifiedIds = Object.keys(draftTestCases);
     if (modifiedIds.length === 0) {
-      setIsGlobalEditing(false);
+      setEditingGroupKey(null);
       return;
     }
 
@@ -234,7 +250,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
         modifiedIds.map(id => updateTestCase.mutateAsync({ id, data: draftTestCases[id] }))
       );
       showToast("Bulk update successful!");
-      setIsGlobalEditing(false);
+      setEditingGroupKey(null);
       setDraftTestCases({});
     } catch (e) {
       alert("Failed to save some test cases.");
@@ -250,10 +266,10 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
       return;
     }
 
-    // Smart default: use the first test case's requirement_id if available
-    const reqId = testCases.length > 0 ? testCases[0].requirement_id : null;
+    // Gắn test case mới vào ĐÚNG requirement của nhóm mà người dùng bấm "+ Thêm".
+    const reqId = addingRequirementId;
     if (!reqId) {
-      alert("Cannot add manual test case: No requirement found in this document. Please generate AI test cases first.");
+      alert("Không xác định được requirement để thêm test case. Vui lòng thử lại.");
       return;
     }
 
@@ -271,7 +287,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
         status: "draft"
       });
       showToast("Test case added successfully!");
-      setIsAddingRow(false);
+      setAddingGroupKey(null);
       setNewRowDraft({ priority: "Medium", status: "draft", execution_status: "Untested", execution_type: "Manual" });
     } catch (e) {
       alert("Failed to add test case");
@@ -369,16 +385,16 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
           onFilterPriorityChange={setFilterPriority}
           filterTestType={filterTestType}
           onFilterTestTypeChange={setFilterTestType}
-          isGlobalEditing={isGlobalEditing}
+          editingGroupKey={editingGroupKey}
           draftTestCases={draftTestCases}
           isBulkSaving={isBulkSaving}
-          onStartGlobalEditing={startGlobalEditing}
-          onCancelGlobalEditing={cancelGlobalEditing}
+          onStartGroupEditing={startGroupEditing}
+          onCancelGroupEditing={cancelGroupEditing}
           onSaveBulkEditing={saveBulkEditing}
           onDraftChange={handleDraftChange}
-          isAddingRow={isAddingRow}
-          onAddRowClick={() => setIsAddingRow(true)}
-          onCancelAddRow={() => setIsAddingRow(false)}
+          addingGroupKey={addingGroupKey}
+          onAddRowClick={startAddRow}
+          onCancelAddRow={cancelAddRow}
           newRowDraft={newRowDraft}
           onNewRowDraftChange={setNewRowDraft}
           onAddNewRow={handleAddNewRow}

@@ -21,9 +21,11 @@ HƯỚNG DẪN SỬ DỤNG TOOLS:
 - Nếu người dùng hỏi câu hỏi thông thường: Bạn có thể gọi `search_documents_tool` để tìm kiếm và trả lời.
 
 ĐẶC BIỆT QUAN TRỌNG VỀ KẾT QUẢ TOOL:
-- Kết quả từ `extract_requirement_tool` và `generate_test_case_tool` ĐÃ ĐƯỢC HỆ THỐNG TỰ ĐỘNG STREAM THÀNH BẢNG MARKDOWN LÊN MÀN HÌNH CHO NGƯỜI DÙNG.
-- Bạn TUYỆT ĐỐI KHÔNG ĐƯỢC lặp lại, không được sinh lại, và không được tóm tắt nội dung của bảng này trong câu trả lời của bạn. Việc lặp lại sẽ gây tốn kém token và làm chậm hệ thống.
-- Sau khi gọi tool xong, bạn CHỈ CẦN trả lời 1 câu siêu ngắn gọn: "Tôi đã tạo xong và hiển thị kết quả ở bảng trên."
+- Kết quả từ `extract_requirement_tool` ĐÃ ĐƯỢC HỆ THỐNG TỰ ĐỘNG STREAM LÊN MÀN HÌNH CHO NGƯỜI DÙNG dưới dạng chi tiết đầy đủ.
+- Kết quả từ `generate_test_case_tool` ĐÃ ĐƯỢC HỆ THỐNG TỰ ĐỘNG STREAM LÊN MÀN HÌNH dưới dạng TÓM TẮT NGẮN (số lượng + vài test case đầu) kèm link dẫn sang Tester Studio để xem/sửa đầy đủ — đây là hành vi CHỦ ĐÍCH (bảng đầy đủ quá khổ so với khung chat), KHÔNG phải lỗi thiếu dữ liệu.
+- Bạn TUYỆT ĐỐI KHÔNG ĐƯỢC lặp lại, không được sinh lại, và không được tóm tắt thêm nội dung mà tool đã trả về trong câu trả lời của bạn. Việc lặp lại sẽ gây tốn kém token và làm chậm hệ thống.
+- Bạn KHÔNG ĐƯỢC tự ý liệt kê thêm toàn bộ test case ở dạng bảng — nếu người dùng muốn xem đầy đủ, hãy nhắc họ dùng link Tester Studio đã có sẵn trong kết quả tool.
+- Sau khi gọi tool xong, bạn CHỈ CẦN trả lời 1 câu siêu ngắn gọn: "Tôi đã tạo xong và hiển thị kết quả ở trên."
 """
 
 # ── Prompt cho luồng FAST (không dùng tool) ─────────────────────────────────
@@ -59,6 +61,11 @@ Nhãn được phép:
 - "general_chat": Khi người dùng đặt câu hỏi, yêu cầu giải thích, phân tích nghiệp vụ, tóm tắt nội dung tài liệu.
 - "small_talk": Khi người dùng chào hỏi, cảm ơn, tán gẫu, hoặc các câu không mang tính chất phân tích công việc.
 
+Quy tắc quan trọng khi phân loại:
+- "execute_tool" chỉ dành cho MỆNH LỆNH yêu cầu tạo/sinh/cập nhật dữ liệu thực sự (có động từ hành động: tạo, sinh, generate, cập nhật...).
+- Nếu câu chỉ HỎI về khái niệm, quy trình, hoặc định nghĩa — dù có nhắc tên "requirement"/"test case" — thì đó là "general_chat", KHÔNG phải "execute_tool".
+- Nếu không chắc chắn, hoặc câu vừa mang tính hỏi vừa nhắc tên thao tác → chọn "general_chat" (mặc định an toàn, tránh gọi tool nhầm).
+
 Chỉ trả về MỘT trong ba nhãn đó, KHÔNG kèm bất kỳ giải thích hay ký tự nào khác.
 
 Ví dụ:
@@ -69,6 +76,9 @@ Ví dụ:
 - "module này có những chức năng gì?" → general_chat
 - "phân tích luồng đăng nhập" → general_chat
 - "tóm tắt tài liệu tổng quan" → general_chat
+- "test case là gì?" → general_chat
+- "quy trình tạo requirement diễn ra thế nào?" → general_chat
+- "nên viết test case cho màn hình này ra sao?" → general_chat
 - "chào bạn", "cảm ơn", "bạn là ai", "ok" → small_talk
 """
 

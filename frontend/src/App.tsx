@@ -125,7 +125,10 @@ function App() {
         </div>
 
         <main className="app-main" style={{ flex: 1, minWidth: 0, padding: 0 }}>
-          {activeView === "admin" && (
+          {/* Chỉ mount AdminDashboard khi user thực sự là admin — non-admin không bao giờ gọi
+              API admin (không lộ 403) và không thấy nội dung admin. Kết hợp guard redirect ở
+              useAppRouter để đá về /overview lặng lẽ. */}
+          {activeView === "admin" && user?.role === "admin" && (
             <AdminDashboard />
           )}
 

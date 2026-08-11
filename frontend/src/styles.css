@@ -1104,6 +1104,12 @@ input:-webkit-autofill:active {
   min-width: 800px;
 }
 
+/* Header nhóm requirement (bấm để gập/mở) — hover làm tối nhẹ. Dùng filter thay vì đổi
+   background vì màu nền của header đang được set inline (accent-dim) nên CSS background không đè được. */
+.tcs-group-row:hover td {
+  filter: brightness(0.97);
+}
+
 .tc-table th {
   font-size: 11px;
   font-weight: 600;
@@ -2098,6 +2104,50 @@ input[type="checkbox"]:checked::after {
 }
 .markdown-body tbody tr:hover {
   background: rgba(0, 0, 0, 0.03);
+}
+
+/* Link mặc định trong nội dung chat — dùng màu accent thay vì xanh/tím mặc định của trình duyệt. */
+.markdown-body a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+/* CTA "Xem đầy đủ trong Tester Studio" — style thành nút pill cho hợp giao diện, kèm mũi tên.
+   Target theo href để chỉ áp cho deep-link sang Tester Studio (xem chat_agent._format_test_cases_summary),
+   không ảnh hưởng các link khác trong chat. */
+.markdown-body a[href^="/test-cases"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 7px 14px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  border-radius: 8px;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+.markdown-body a[href^="/test-cases"]::after {
+  content: "→";
+  font-size: 14px;
+  transition: transform 0.15s ease;
+}
+.markdown-body a[href^="/test-cases"]:hover {
+  background: var(--accent-hover);
+  text-decoration: none;
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+.markdown-body a[href^="/test-cases"]:hover::after {
+  transform: translateX(3px);
+}
+.markdown-body a[href^="/test-cases"]:active {
+  transform: translateY(1px);
 }
 
 
@@ -3941,14 +3991,15 @@ dialog.confirm-dialog[open]::backdrop {
 /* ── Chat message navigator (minimap cạnh scrollbar) ──────── */
 .chat-msg-navigator {
   position: absolute;
-  top: 12px;
-  bottom: 12px;
+  /* Chỉ cao ĐÚNG bằng cụm vạch và canh giữa theo chiều dọc. Trước đây kéo full chiều cao
+     khung chat (top/bottom: 12px) nên vùng hover mở popup trải khắp mép phải — popup bật lên
+     cả khi chuột ở phần trống trên/dưới cụm vạch. Giờ chỉ hover đúng cụm vạch mới mở popup. */
+  top: 50%;
+  transform: translateY(-50%);
   right: 3px;
   width: 14px;
   display: flex;
   flex-direction: column;
-  /* Các vạch nằm sát nhau thành 1 cụm ở giữa, không dàn trải hết chiều cao khung chat */
-  justify-content: center;
   align-items: center;
   gap: 5px;
   padding: 4px 0;
