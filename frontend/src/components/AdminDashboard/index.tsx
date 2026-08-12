@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Download, RefreshCw, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
-import { useAdminStats, useAdminUsers, useUpdateUserCredits } from "../../hooks/useAdmin";
+import { useAdminStats, useAdminUsers, useUpdateUserCredits, useUpdateUserPlan } from "../../hooks/useAdmin";
 import KpiCards from "./KpiCards";
 import UserTable from "./UserTable";
 import UserTableToolbar, { RoleFilter, SortOption } from "./UserTableToolbar";
@@ -9,6 +9,7 @@ export default function AdminDashboard() {
   const { data: stats, isLoading: statsLoading, isError: statsError, error: statsErrObj, refetch: refetchStats } = useAdminStats();
   const { data: users = [], isLoading: usersLoading, isError: usersError, error: usersErrObj, refetch: refetchUsers } = useAdminUsers();
   const updateCreditsMutation = useUpdateUserCredits();
+  const updatePlanMutation = useUpdateUserPlan();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
@@ -29,7 +30,7 @@ export default function AdminDashboard() {
     if (!users.length) return;
     const headers = ["ID", "Email", "Role", "Plan", "Credit Balance", "Projects", "Requirements", "Test Cases", "Created At"];
     const rows = users.map((u) => {
-      const userPlan = u.plan || (u.role === "admin" || u.credit_balance >= 2000 ? "Pro Plan" : u.credit_balance >= 600 ? "Lite Plan" : "Free Plan");
+      const userPlan = u.plan || (u.role === "admin" || u.credit_balance >= 1500 ? "Pro Plan" : u.credit_balance >= 600 ? "Lite Plan" : "Free Plan");
       return [
         u.id,
         u.email,
@@ -215,7 +216,7 @@ export default function AdminDashboard() {
             />
           </div>
 
-          <UserTable users={processedUsers} updateCreditsMutation={updateCreditsMutation} onShowToast={showToast} />
+          <UserTable users={processedUsers} updateCreditsMutation={updateCreditsMutation} updatePlanMutation={updatePlanMutation} onShowToast={showToast} />
         </div>
       </div>
     </div>

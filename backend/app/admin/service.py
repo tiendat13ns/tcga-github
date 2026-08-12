@@ -5,7 +5,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Document, Project, Requirement, TestCase, UsageLog, User
+from app.models import Document, Feedback, Project, Requirement, TestCase, UsageLog, User
+from app.services.credit_service import PLAN_DEFINITIONS, get_plan_key
 
 
 def get_admin_stats(db: Session) -> dict[str, int]:
@@ -73,7 +74,7 @@ def get_admin_users(db: Session) -> list[dict[str, Any]]:
         requirements_count = requirements_counts.get(user.id, 0)
         test_cases_count = test_cases_counts.get(user.id, 0)
 
-        plan = "Pro Plan" if (user.role == "admin" or (user.credit_balance is not None and user.credit_balance >= 2000)) else ("Lite Plan" if (user.credit_balance is not None and user.credit_balance >= 600) else "Free Plan")
+        plan = PLAN_DEFINITIONS[get_plan_key(user)]["name"]
 
         results.append(
             {
@@ -116,3 +117,66 @@ def update_user_credits(db: Session, user_id: UUID, credit_balance: int) -> dict
         "user_id": str(target_user.id),
         "credit_balance": target_user.credit_balance,
     }
+
+
+def update_user_plan(db: Session, user_id: UUID, plan_key: str) -> dict[str, Any]:
+    """Đổi gói dịch vụ của user (độc lập với credit_balance). plan_key: 'free'|'lite'|'pro'."""
+    if plan_key not in PLAN_DEFINITIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid plan '{plan_key}'. Must be one of: {', '.join(PLAN_DEFINITIONS)}",
+        )
+
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    target_user.plan = plan_key
+    db.commit()
+    db.refresh(target_user)
+
+    return {
+        "message": "User plan updated successfully",
+        "user_id": str(target_user.id),
+        "plan": PLAN_DEFINITIONS[plan_key]["name"],
+    }
+
+
+def get_admin_feedback(db: Session) -> list[dict[str, Any]]:
+    """Lấy danh sách feedback người dùng gửi, kèm email người gửi, mới nhất trước."""
+    rows = (
+        db.query(Feedback, User.email)
+        .join(User, User.id == Feedback.user_id)
+        .order_by(Feedback.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": str(fb.id),
+            "user_email": email,
+            "type": fb.type,
+            "message": fb.message,
+            "status": fb.status,
+            "created_at": fb.created_at.isoformat() if fb.created_at else None,
+        }
+        for fb, email in rows
+    ]
+
+
+def update_feedback_status(db: Session, feedback_id: UUID, status_value: str) -> dict[str, Any]:
+    """Đánh dấu feedback đã xem/xử lý."""
+    feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
+    if not feedback:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feedback not found",
+        )
+
+    feedback.status = status_value
+    db.commit()
+    db.refresh(feedback)
+
+    return {"id": str(feedback.id), "status": feedback.status}

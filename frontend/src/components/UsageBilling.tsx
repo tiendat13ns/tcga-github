@@ -48,7 +48,7 @@ function fmtPrice(n: number) {
 }
 
 /* ── Credit Ring ─────────────────────────────────────────── */
-function CreditRing({ balance, used }: { balance: number; used: number }) {
+export function CreditRing({ balance, used }: { balance: number; used: number }) {
   const total = balance + used || 1;
   const pct = Math.min((balance / total) * 100, 100);
   const r = 40;
@@ -81,8 +81,10 @@ function CreditRing({ balance, used }: { balance: number; used: number }) {
 }
 
 /* ── Plan Card ───────────────────────────────────────────── */
-function PlanCard({ plan, isCurrent }: { plan: UsagePlan; isCurrent: boolean }) {
-  const isComingSoon = plan.status === "coming_soon";
+export function PlanCard({ plan, isCurrent }: { plan: UsagePlan; isCurrent: boolean }) {
+  // Nếu là gói hiện tại của user thì ưu tiên nhãn ACTIVE — không hiện "coming soon" nữa
+  // (admin có thể đã gán trực tiếp gói Lite/Pro dù chúng chưa mở mua tự phục vụ).
+  const isComingSoon = plan.status === "coming_soon" && !isCurrent;
 
   return (
     <div

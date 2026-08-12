@@ -1,9 +1,10 @@
 import { useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { LogOut, Zap, ShieldCheck, ChevronRight } from "lucide-react";
+import { LogOut, Zap, ShieldCheck, ChevronRight, Settings, MessageCircleMore } from "lucide-react";
 import { TCGAAppIcon } from "./TCGALogo";
 import { Project } from "./Projects/ProjectManager";
 import { useUsageSummary, getCurrentPlanQuota } from "../hooks/useUsage";
+import FeedbackModal from "./FeedbackModal";
 
 function PieChartIcon() {
   return (
@@ -144,12 +145,12 @@ function SidebarNavItem({ dataTour, isActive, isSidebarOpen, onClick, icon, labe
   );
 }
 
-export type GlobalViewType = "overview" | "projects" | "project_detail" | "test_cases" | "usage" | "tutorial" | "admin";
+export type GlobalViewType = "overview" | "projects" | "project_detail" | "test_cases" | "usage" | "tutorial" | "admin" | "settings" | "admin_feedback";
 
 type GlobalSidebarProps = {
   activeView: GlobalViewType;
   selectedProject?: Project | null;
-  onNavigate: (view: "overview" | "projects" | "test_cases" | "usage" | "tutorial" | "admin") => void;
+  onNavigate: (view: "overview" | "projects" | "test_cases" | "usage" | "tutorial" | "admin" | "settings" | "admin_feedback") => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
   user: { email: string; role?: string; credit_balance: number } | null;
@@ -159,6 +160,7 @@ type GlobalSidebarProps = {
 
 export default function GlobalSidebar({ activeView, selectedProject, onNavigate, isSidebarOpen, onToggleSidebar, user, onLogout, onGoToLanding }: GlobalSidebarProps) {
   const isAdmin = user?.role === "admin";
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   // Admin không còn bypass credit ở backend — dùng chung logic quota/progress-bar với
   // mọi user (current_plan trả về đúng gói thật dựa trên credit_balance).
   const { data: usageSummary, isLoading: usageLoading } = useUsageSummary({ enabled: !!user });
@@ -176,19 +178,24 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
 
   return (
     <aside className="global-sidebar project-sidebar" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
-      <div className="sidebar-header" style={{ justifyContent: isSidebarOpen ? "space-between" : "center", padding: isSidebarOpen ? "14px 20px" : "14px 0" }}>
+      <div className="sidebar-header" style={{ justifyContent: isSidebarOpen ? "space-between" : "center", gap: "10px", padding: isSidebarOpen ? "24px 20px" : "24px 0", alignItems: "center" }}>
         {isSidebarOpen ? (
           <>
             <button
               type="button"
               onClick={onGoToLanding}
               title="Test Case Generation Assistant · AI-powered — Về trang chủ"
-              style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", padding: 0, cursor: onGoToLanding ? "pointer" : "default" }}
+              style={{ display: "flex", alignItems: "center", gap: "11px", background: "none", border: "none", padding: 0, cursor: onGoToLanding ? "pointer" : "default", minWidth: 0 }}
             >
-              <TCGAAppIcon size={26} />
-              <span className="sidebar-title" style={{ fontSize: "14px", fontWeight: 700, letterSpacing: "0.02em" }}>TCGA</span>
+              <TCGAAppIcon size={40} />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0, maxWidth: "150px" }}>
+                <span className="sidebar-title" style={{ fontSize: "15px", fontWeight: 700, letterSpacing: "0.02em", lineHeight: 1.1 }}>TCGA</span>
+                <span style={{ fontSize: "10px", fontWeight: 500, color: "var(--text-muted)", letterSpacing: "0.01em", lineHeight: 1.3, marginTop: "3px", textAlign: "left" }}>
+                  Test Case Generation Assistant
+                </span>
+              </div>
             </button>
-            <button type="button" className="icon-btn-ghost" onClick={onToggleSidebar} title="Close sidebar">
+            <button type="button" className="icon-btn-ghost" onClick={onToggleSidebar} title="Close sidebar" style={{ flexShrink: 0 }}>
               <PanelLeftCloseIcon />
             </button>
           </>
@@ -270,6 +277,22 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
           icon={<HelpCircleIcon />}
           label="Tutorial"
         />
+        <SidebarNavItem
+          dataTour="nav-settings"
+          isActive={activeView === "settings"}
+          isSidebarOpen={isSidebarOpen}
+          onClick={() => onNavigate("settings")}
+          icon={<Settings size={18} />}
+          label="Settings"
+        />
+        <SidebarNavItem
+          dataTour="nav-feedback"
+          isActive={isAdmin && activeView === "admin_feedback"}
+          isSidebarOpen={isSidebarOpen}
+          onClick={() => (isAdmin ? onNavigate("admin_feedback") : setIsFeedbackOpen(true))}
+          icon={<MessageCircleMore size={18} />}
+          label="Feedback"
+        />
       </ul>
 
       {user && (
@@ -324,6 +347,8 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
           </div>
         </>
       )}
+
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </aside>
   );
 }

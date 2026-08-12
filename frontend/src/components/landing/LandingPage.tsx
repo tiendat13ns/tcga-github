@@ -2,6 +2,7 @@ import "./landing.css";
 import LandingHeader from "./LandingHeader";
 import LandingHero from "./LandingHero";
 import LandingPainPoints from "./LandingPainPoints";
+import LandingProduct from "./LandingProduct";
 import LandingHowItWorks from "./LandingHowItWorks";
 import LandingFeatures from "./LandingFeatures";
 import LandingWhoItsFor from "./LandingWhoItsFor";
@@ -15,9 +16,10 @@ type LandingPageProps = {
   onGoToLogin: () => void;
   onGoToRegister: () => void;
   onGoToDashboard: () => void;
+  onGoToWhatsNew?: () => void;
 };
 
-export default function LandingPage({ isAuthenticated, onGoToLogin, onGoToRegister, onGoToDashboard }: LandingPageProps) {
+export default function LandingPage({ isAuthenticated, onGoToLogin, onGoToRegister, onGoToDashboard, onGoToWhatsNew }: LandingPageProps) {
   const primaryCta = isAuthenticated ? onGoToDashboard : onGoToRegister;
 
   return (
@@ -31,6 +33,7 @@ export default function LandingPage({ isAuthenticated, onGoToLogin, onGoToRegist
       <main>
         <LandingHero isAuthenticated={isAuthenticated} onPrimaryCta={primaryCta} />
         <LandingPainPoints />
+        <LandingProduct />
         <LandingHowItWorks />
         <LandingFeatures />
         <LandingWhoItsFor />
@@ -38,7 +41,7 @@ export default function LandingPage({ isAuthenticated, onGoToLogin, onGoToRegist
         <LandingFaq />
         <LandingCta isAuthenticated={isAuthenticated} onPrimaryCta={primaryCta} />
       </main>
-      <LandingFooter />
+      <LandingFooter onGoToWhatsNew={onGoToWhatsNew} />
     </div>
   );
 }

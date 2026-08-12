@@ -72,6 +72,8 @@ def _document_model_to_schema(document: Document) -> DocumentMetadata:
         uploaded_at=_format_datetime(document.uploaded_at),
         error_message=document.error_message,
         updated_at=_format_datetime(document.updated_at),
+        requirement_status=document.requirement_status,
+        requirement_error=document.requirement_error,
     )
 
 

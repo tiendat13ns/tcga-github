@@ -7,7 +7,9 @@ import ProjectsGrid from "./components/Projects/ProjectsGrid";
 import ProjectDetailDashboard from "./components/Projects/ProjectDetailDashboard";
 import TesterStudio from "./components/TesterStudio";
 import UsageBilling from "./components/UsageBilling";
+import SettingsPage from "./components/SettingsPage";
 import AdminDashboard from "./components/AdminDashboard";
+import AdminFeedbackPage from "./components/AdminDashboard/FeedbackPage";
 import OverviewDashboard from "./components/OverviewDashboard";
 import OnboardingTour from "./components/Tutorial/OnboardingTour";
 import TutorialsView from "./components/Tutorial/TutorialsView";
@@ -15,6 +17,7 @@ import { useAppRouter } from "./hooks/useAppRouter";
 import { useAuth } from "./contexts/AuthContext";
 import LoginScreen from "./components/LoginScreen";
 import LandingPage from "./components/landing/LandingPage";
+import WhatsNewPage from "./components/landing/WhatsNewPage";
 
 export type DocumentItem = {
   id: string;
@@ -28,6 +31,9 @@ export type DocumentItem = {
   uploaded_at: string;
   error_message?: string | null;
   updated_at?: string | null;
+  // Trạng thái sinh requirement chạy nền: null = chưa/xong, "generating", "failed".
+  requirement_status?: string | null;
+  requirement_error?: string | null;
 };
 
 function App() {
@@ -79,6 +85,25 @@ function App() {
           setActiveView(isAdmin ? "admin" : "overview");
           navigateTo(isAdmin ? "/admin" : "/overview");
         }}
+        onGoToWhatsNew={() => navigateTo("/whats-new")}
+      />
+    );
+  }
+
+  // Trang "Tính năng mới" — công khai như landing, tách route riêng để không làm loãng nội
+  // dung landing (mục tiêu chuyển đổi khách mới) với changelog (phục vụ người dùng hiện tại).
+  if (pathname === "/whats-new") {
+    return (
+      <WhatsNewPage
+        isAuthenticated={isAuthenticated}
+        onGoToLogin={() => navigateTo("/login")}
+        onGoToRegister={() => navigateTo("/register")}
+        onGoToDashboard={() => {
+          const isAdmin = user?.role === "admin";
+          setActiveView(isAdmin ? "admin" : "overview");
+          navigateTo(isAdmin ? "/admin" : "/overview");
+        }}
+        onGoToLanding={() => navigateTo("/")}
       />
     );
   }
@@ -144,6 +169,10 @@ function App() {
             <AdminDashboard />
           )}
 
+          {activeView === "admin_feedback" && user?.role === "admin" && (
+            <AdminFeedbackPage />
+          )}
+
           {activeView === "overview" && (
             <OverviewDashboard
               onNavigateToProjects={() => handleNavigate("projects")}
@@ -169,6 +198,10 @@ function App() {
           )}
 
           {activeView === "tutorial" && <TutorialsView onStartTour={startTour} />}
+
+          {activeView === "settings" && (
+            <SettingsPage onNavigateToUsage={() => handleNavigate("usage")} />
+          )}
         </main>
       </div>
     </div>

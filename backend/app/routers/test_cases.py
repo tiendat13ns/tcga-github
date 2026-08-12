@@ -7,19 +7,23 @@ import io
 
 from app.core.auth import get_current_user, get_db
 from app.models import Document, Project, Requirement, User
-from app.schemas.test_case_schema import GenerateTestCasesResponse, ListTestCasesResponse
-from app.services.credit_service import CREDIT_COST, deduct_user_credits
+from app.schemas.requirement_schema import GenerationStartedResponse
+from app.schemas.test_case_schema import ListTestCasesResponse
+from app.services.credit_service import CREDIT_COST
+from app.services.generation import job_runner
 from app.services.generation.test_case_generation_service import (
     TestCaseGenerationError,
-    generate_test_cases_from_requirement,
     list_test_cases_by_requirement,
+    run_test_case_generation_job,
+    set_requirement_test_case_status,
 )
 
 router = APIRouter(prefix="/api/v1/requirements", tags=["test-cases"])
 
 
-def _verify_requirement_owner(db: Session, requirement_id: str, user: User) -> None:
-    """Đảm bảo requirement thuộc project của chính user đang đăng nhập (chặn thao tác chéo tài khoản)."""
+def _verify_requirement_owner(db: Session, requirement_id: str, user: User) -> Requirement:
+    """Đảm bảo requirement thuộc project của chính user đang đăng nhập (chặn thao tác chéo tài khoản).
+    Trả về Requirement để caller dùng lại."""
     try:
         req_uuid = UUID(requirement_id)
     except ValueError:
@@ -37,32 +41,35 @@ def _verify_requirement_owner(db: Session, requirement_id: str, user: User) -> N
     project = db.get(Project, project_id)
     if project is None or project.user_id != user.id:
         raise HTTPException(status_code=403, detail="Bạn không có quyền trên requirement này.")
+    return req
 
 
 @router.post(
     "/{requirement_id}/test-cases/generate",
-    response_model=GenerateTestCasesResponse,
+    response_model=GenerationStartedResponse,
+    status_code=202,
 )
 async def generate_test_cases(
     requirement_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _verify_requirement_owner(db, requirement_id, current_user)
-    # Chặn sớm nếu không đủ credit — tránh gọi LLM tốn kém rồi mới báo thiếu.
+    """Nhận yêu cầu sinh test case rồi chạy NỀN — trả 202 ngay. Frontend poll trạng thái qua
+    requirement (test_case_status). Credit chỉ trừ khi job thành công (trong background)."""
+    req = _verify_requirement_owner(db, requirement_id, current_user)
+    # Chặn sớm nếu không đủ credit — tránh chạy job rồi mới báo thiếu.
     cost = CREDIT_COST.get("TEST_CASE_GENERATION", 0)
     if current_user.credit_balance < cost:
         raise HTTPException(
             status_code=402,
             detail=f"Không đủ Credit. Cần {cost} Credits nhưng chỉ còn {current_user.credit_balance}.",
         )
-    try:
-        result = await generate_test_cases_from_requirement(requirement_id)
-    except TestCaseGenerationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    # Chỉ trừ credit khi sinh thành công (nhất quán với luồng chat).
-    deduct_user_credits(db, current_user, "TEST_CASE_GENERATION")
-    return result
+    if req.test_case_status == "generating":
+        raise HTTPException(status_code=409, detail="Requirement này đang được sinh test case.")
+
+    set_requirement_test_case_status(requirement_id, "generating", None)
+    job_runner.submit(run_test_case_generation_job(requirement_id, str(current_user.id)))
+    return GenerationStartedResponse(status="generating", requirement_id=requirement_id)
 
 
 @router.get(

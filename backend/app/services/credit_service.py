@@ -33,11 +33,25 @@ CREDIT_COST = {
     "TEST_CASE_GENERATION": 50,
 }
 
-# ── Quota theo từng gói (khớp ngưỡng credit dùng để xác định plan ở frontend) ──
-FREE_PLAN_MAX_DOCUMENTS = 5
-LITE_PLAN_MAX_DOCUMENTS = 15
-LITE_PLAN_CREDIT_THRESHOLD = 600
-PRO_PLAN_CREDIT_THRESHOLD = 2000
+# ── Định nghĩa gói dịch vụ — NGUỒN SỰ THẬT DUY NHẤT ─────────────────────────────
+# Plan giờ là một thuộc tính độc lập của user (cột users.plan), KHÔNG còn suy ra từ
+# credit_balance nữa. credit_balance chỉ là số dư để chi tiêu cho tác vụ AI; plan quyết
+# định quota (số tài liệu / project / dung lượng). Mọi nơi cần thông tin gói (usage summary,
+# admin, kiểm tra quota) đều đọc từ dict này để tránh lệch số liệu giữa các chỗ.
+# max_documents / max_projects = None nghĩa là không giới hạn.
+PLAN_DEFINITIONS: dict[str, dict] = {
+    "free": {"name": "Free Plan", "credits_per_month": 200, "max_documents": 5, "max_projects": 3, "storage_mb": 50, "price_vnd": 0},
+    "lite": {"name": "Lite Plan", "credits_per_month": 600, "max_documents": 15, "max_projects": 10, "storage_mb": 500, "price_vnd": 99000},
+    "pro": {"name": "Pro Plan", "credits_per_month": 1500, "max_documents": None, "max_projects": None, "storage_mb": 2048, "price_vnd": 199000},
+}
+PLAN_ORDER = ["free", "lite", "pro"]
+DEFAULT_PLAN = "free"
+
+
+def get_plan_key(user: "User") -> str:
+    """Trả về key gói hợp lệ của user ('free'|'lite'|'pro'), mặc định 'free' nếu chưa set."""
+    key = getattr(user, "plan", None) or DEFAULT_PLAN
+    return key if key in PLAN_DEFINITIONS else DEFAULT_PLAN
 
 
 def deduct_user_credits(
@@ -86,16 +100,13 @@ def deduct_user_credits(
 
 def resolve_user_plan(user: "User") -> tuple[str, int | None]:
     """
-    Trả về (tên plan, giới hạn document) suy ra từ credit_balance hiện tại của user.
-    None = không giới hạn (Pro). Áp dụng chung cho mọi user, kể cả admin — không có
-    bypass theo role, đúng gói nào thì đúng quyền lợi/giới hạn của gói đó.
+    Trả về (tên gói dạng ngắn, giới hạn document) theo cột plan của user.
+    None = không giới hạn (Pro). Áp dụng chung cho mọi user, kể cả admin — đúng gói nào
+    thì đúng quyền lợi/giới hạn của gói đó, không bypass theo role.
     """
-    credit_balance = getattr(user, "credit_balance", 0) or 0
-    if credit_balance >= PRO_PLAN_CREDIT_THRESHOLD:
-        return "Pro", None
-    if credit_balance >= LITE_PLAN_CREDIT_THRESHOLD:
-        return "Lite", LITE_PLAN_MAX_DOCUMENTS
-    return "Free", FREE_PLAN_MAX_DOCUMENTS
+    key = get_plan_key(user)
+    plan = PLAN_DEFINITIONS[key]
+    return key.capitalize(), plan["max_documents"]
 
 
 def check_document_upload_quota(db: Session, user: "User", num_new_files: int = 1) -> None:

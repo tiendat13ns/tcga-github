@@ -10,6 +10,7 @@ type LandingHeaderProps = {
 };
 
 const NAV_LINKS = [
+  { href: "#product", label: "Sản phẩm" },
   { href: "#how-it-works", label: "Cách hoạt động" },
   { href: "#features", label: "Tính năng" },
   { href: "#who-its-for", label: "Dành cho ai" },

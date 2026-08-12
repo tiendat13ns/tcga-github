@@ -26,6 +26,9 @@ class RequirementResponse(BaseModel):
     # Human-in-the-Loop Q&A fields
     clarifying_questions: list[str] | None = None
     user_answers: list[str] | None = None
+    # Trạng thái sinh test case chạy nền cho requirement này (None/"generating"/"failed").
+    test_case_status: str | None = None
+    test_case_error: str | None = None
 
 
 class GenerateRequirementsResponse(BaseModel):
@@ -39,3 +42,15 @@ class ListRequirementsResponse(BaseModel):
     document_id: str
     total_requirements: int
     requirements: list[RequirementResponse]
+
+
+class BulkRequirementsResponse(BaseModel):
+    """documents keyed by document_id — chỉ chứa các document đã có requirements."""
+    documents: dict[str, ListRequirementsResponse]
+
+
+class GenerationStartedResponse(BaseModel):
+    """Trả về khi một tác vụ sinh (requirement/test case) được nhận và chạy nền (HTTP 202)."""
+    status: str = "generating"
+    document_id: str | None = None
+    requirement_id: str | None = None

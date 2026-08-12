@@ -13,6 +13,9 @@ class DocumentMetadata(BaseModel):
     uploaded_at: str
     error_message: str | None = None
     updated_at: str | None = None
+    # Trạng thái sinh requirement chạy nền (None/"generating"/"failed").
+    requirement_status: str | None = None
+    requirement_error: str | None = None
 
 
 class DocumentDetail(DocumentMetadata):

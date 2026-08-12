@@ -3,7 +3,11 @@ import { TCGAMark } from "../TCGALogo";
 
 const CONTACT_EMAIL = "dat96133@gmail.com";
 
-export default function LandingFooter() {
+type LandingFooterProps = {
+  onGoToWhatsNew?: () => void;
+};
+
+export default function LandingFooter({ onGoToWhatsNew }: LandingFooterProps) {
   return (
     <footer className="landing-footer">
       <div className="landing-footer-inner">
@@ -26,6 +30,11 @@ export default function LandingFooter() {
           <a href="#who-its-for">Dành cho ai</a>
           <a href="#usage">Usage</a>
           <a href="#faq">FAQ</a>
+          {onGoToWhatsNew && (
+            <button type="button" onClick={onGoToWhatsNew} className="landing-footer-link-btn">
+              Tính năng mới
+            </button>
+          )}
         </div>
 
         <div className="landing-footer-col">

@@ -1,5 +1,5 @@
 import { useState, FormEvent } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, FolderGit2 } from "lucide-react";
 import { Project } from "./ProjectManager";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "../../hooks/useProjects";
 import ConfirmDialog from "../ConfirmDialog";
@@ -7,7 +7,7 @@ import ModalDialog from "../ModalDialog";
 
 function FolderIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
     </svg>
   );
@@ -210,11 +210,11 @@ export default function ProjectsGrid({ onSelectProject }: ProjectsGridProps) {
       <div className="tcs-view-header">
         <div className="tcs-view-title-row">
           <div className="tcs-title">
-            <div className="tcs-title-icon" style={{ background: "var(--accent-glow)", color: "var(--accent)" }}>
-              <FolderIcon />
+            <div className="tcs-title-icon">
+              <FolderGit2 size={20} strokeWidth={1.75} />
             </div>
             <div>
-              <div style={{ fontSize: "20px", fontWeight: 600 }}>Projects</div>
+              <div style={{ fontSize: "20px", fontWeight: 700 }}>Projects</div>
               <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400, marginTop: "2px" }}>
                 Manage project workspace and isolate RAG knowledge base
               </div>
@@ -243,10 +243,10 @@ export default function ProjectsGrid({ onSelectProject }: ProjectsGridProps) {
             </button>
           </div>
         ) : (
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", 
-            gap: "24px" 
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+            gap: "16px"
           }}>
             {projects.map(p => (
               <div 
@@ -255,8 +255,8 @@ export default function ProjectsGrid({ onSelectProject }: ProjectsGridProps) {
                 style={{
                   backgroundColor: "var(--bg-surface)",
                   border: "1px solid var(--border)",
-                  borderRadius: "12px",
-                  padding: "20px",
+                  borderRadius: "8px",
+                  padding: "18px",
                   cursor: "pointer",
                   transition: "all var(--transition-fast)",
                   display: "flex",
@@ -265,9 +265,9 @@ export default function ProjectsGrid({ onSelectProject }: ProjectsGridProps) {
                 }}
                 onClick={() => onSelectProject(p)}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--primary)";
+                  e.currentTarget.style.borderColor = "var(--accent)";
                   e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)";
+                  e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = "var(--border)";
@@ -276,7 +276,7 @@ export default function ProjectsGrid({ onSelectProject }: ProjectsGridProps) {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <div style={{ padding: "10px", backgroundColor: "var(--bg)", borderRadius: "8px", color: "var(--primary)" }}>
+                  <div style={{ width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-elevated)", borderRadius: "8px", color: "var(--accent)", flexShrink: 0 }}>
                     <FolderIcon />
                   </div>
                   <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</h3>

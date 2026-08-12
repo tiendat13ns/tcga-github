@@ -49,6 +49,9 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True)  # Sẽ map 1-1 với auth.users của Supabase
     email = Column(Text, unique=True, nullable=False, index=True)
     role = Column(Text, nullable=False, default="user")
+    # Gói dịch vụ, độc lập với credit_balance: 'free' | 'lite' | 'pro'. Quyết định quota
+    # (số tài liệu/project/dung lượng) — xem PLAN_DEFINITIONS trong services/credit_service.py.
+    plan = Column(Text, nullable=False, default="free")
     credit_balance = Column(Integer, nullable=False, default=200)
     # Đếm cộng dồn, không giảm khi xóa document — chặn việc xóa rồi upload lại để lách quota.
     documents_uploaded_total = Column(Integer, nullable=False, default=0)
@@ -76,6 +79,11 @@ class Document(Base):
     extracted_text = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
     status = Column(Text, nullable=False, default="uploaded")
+    # Trạng thái sinh Requirement chạy nền (tách khỏi `status` vốn là trạng thái extract text):
+    # None = chưa/không đang chạy, "generating" = đang gọi LLM nền, "failed" = lỗi (xem
+    # requirement_error). "Đã xong" được suy ra từ việc requirements đã tồn tại, không cần cờ riêng.
+    requirement_status = Column(Text, nullable=True)
+    requirement_error = Column(Text, nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -158,6 +166,11 @@ class Requirement(Base):
     # Human-in-the-Loop Q&A columns
     clarifying_questions = Column(JSON, nullable=True)   # list[str]: questions AI raised
     user_answers = Column(JSON, nullable=True)            # list[str]: QA/BA answers
+    # Trạng thái sinh Test Case chạy nền cho requirement này: None = chưa/không chạy,
+    # "generating" = đang gọi LLM nền, "failed" = lỗi (xem test_case_error). "Đã xong" suy ra
+    # từ việc test case đã tồn tại cho requirement.
+    test_case_status = Column(Text, nullable=True)
+    test_case_error = Column(Text, nullable=True)
 
 
 class AgentLog(Base):
@@ -249,4 +262,21 @@ class UsageLog(Base):
     operation = Column(Text, nullable=False)     # DOCUMENT_INGESTION | REQUIREMENT_EXTRACTION | TEST_CASE_GENERATION | COPILOT_CHAT
     target_name = Column(Text, nullable=True)    # Tên tài liệu / project liên quan
     credits_used = Column(Integer, nullable=False)  # Số credit đã trừ
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Feedback(Base):
+    """Báo lỗi / góp ý người dùng gửi từ trong app — Admin xem & xử lý ở Admin Dashboard."""
+    __tablename__ = "feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    type = Column(Text, nullable=False, default="other")  # bug | feature_request | other
+    message = Column(Text, nullable=False)
+    status = Column(Text, nullable=False, default="new")  # new | reviewed
     created_at = Column(DateTime(timezone=True), server_default=func.now())

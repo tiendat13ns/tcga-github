@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, FileText } from "lucide-react";
 import { Project } from "../Projects/ProjectManager";
 import { DocumentItem } from "../../App";
 import {
@@ -86,11 +86,11 @@ export default function ProjectWorkspaceView({
         </div>
         <div className="tcs-view-title-row" style={{ marginTop: "12px" }}>
           <div className="tcs-title">
-            <div className="tcs-title-icon" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>
-              <FileTextIcon />
+            <div className="tcs-title-icon">
+              <FileText size={20} strokeWidth={1.75} />
             </div>
             <div>
-              <div style={{ fontSize: "18px", fontWeight: 600 }}>Project Workspace</div>
+              <div style={{ fontSize: "20px", fontWeight: 700 }}>Project Workspace</div>
               <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400, marginTop: "2px" }}>
                 Execution summary, documents, bug reports and untested cases
               </div>

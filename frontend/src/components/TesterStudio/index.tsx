@@ -225,6 +225,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
       test_data: tc.test_data,
       expected_result: tc.expected_result,
       priority: tc.priority,
+      note: tc.note,
     });
   };
 
@@ -249,6 +250,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
           test_data: editDraft.test_data,
           expected_result: editDraft.expected_result,
           priority: editDraft.priority,
+          note: editDraft.note,
         },
       });
       showToast("Test case updated successfully!");
@@ -281,6 +283,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
         test_data: newRowDraft.test_data,
         expected_result: newRowDraft.expected_result || "N/A",
         priority: newRowDraft.priority || "Medium",
+        note: newRowDraft.note,
         execution_status: newRowDraft.execution_status || "Untested",
         execution_type: "Manual",
         status: "draft"

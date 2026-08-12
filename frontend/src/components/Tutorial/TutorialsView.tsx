@@ -27,7 +27,7 @@ const USAGE_STEPS: GuideStep[] = [
   },
   {
     title: "4. Sinh Test Case",
-    body: "Từ mỗi Requirement, bấm \"Generate TCs\" để AI sinh bộ Test Case Blackbox chuẩn QA (Positive, Negative, Boundary), theo đúng kỹ thuật ISTQB.",
+    body: "Từ mỗi Requirement, bấm \"Generate Test Case\" để AI sinh bộ Test Case Blackbox chuẩn QA (Positive, Negative, Boundary), theo đúng kỹ thuật ISTQB.",
   },
   {
     title: "5. Test Case Studio",
@@ -126,11 +126,11 @@ export default function TutorialsView({ onStartTour }: TutorialsViewProps) {
       <div className="tcs-view-header">
         <div className="tcs-view-title-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
           <div className="tcs-title" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <div className="tcs-title-icon" style={{ background: "var(--accent-glow)", color: "var(--accent)" }}>
+            <div className="tcs-title-icon">
               <BookOpen size={20} strokeWidth={1.75} />
             </div>
             <div>
-              <div style={{ fontSize: "20px", fontWeight: 600 }}>Tutorials</div>
+              <div style={{ fontSize: "20px", fontWeight: 700 }}>Tutorials</div>
               <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400, marginTop: "2px" }}>
                 Hướng dẫn sử dụng và Prompt Engineering
               </div>

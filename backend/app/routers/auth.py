@@ -82,10 +82,12 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)) -> Any:
     # Insert into public.users
     user_role = "admin" if _is_admin_email(user_in.email) else "user"
     initial_credits = 3500 if user_role == "admin" else 200
+    initial_plan = "pro" if user_role == "admin" else "free"
     new_user = User(
         id=response.user.id,
         email=user_in.email,
         role=user_role,
+        plan=initial_plan,
         credit_balance=initial_credits
     )
     db.add(new_user)
@@ -139,11 +141,13 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)) -> Any:
     if not user:
         user_role = "admin" if _is_admin_email(response.user.email) else "user"
         initial_credits = 3500 if user_role == "admin" else 200
+        initial_plan = "pro" if user_role == "admin" else "free"
         # Fallback in case they were created in supabase but not synced here
         user = User(
             id=response.user.id,
             email=response.user.email,
             role=user_role,
+            plan=initial_plan,
             credit_balance=initial_credits
         )
         db.add(user)
@@ -151,6 +155,8 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)) -> Any:
     elif _is_admin_email(user.email):
         if user.role != "admin":
             user.role = "admin"
+        if user.plan != "pro":
+            user.plan = "pro"
         if user.credit_balance < 3500:
             user.credit_balance = 3500
         db.commit()
@@ -199,6 +205,7 @@ def get_me(current_user: User = Depends(get_current_user)) -> Any:
         "id": current_user.id,
         "email": current_user.email,
         "role": current_user.role,
+        "plan": current_user.plan,
         "credit_balance": current_user.credit_balance,
         "created_at": current_user.created_at,
     }

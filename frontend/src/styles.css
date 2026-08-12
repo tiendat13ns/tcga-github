@@ -1015,7 +1015,22 @@ input:-webkit-autofill:active {
   flex-wrap: wrap;
   gap: 10px;
   padding: 12px 14px;
+}
+
+.req-card-header.is-expanded {
   border-bottom: 1px solid var(--border-soft);
+}
+
+.req-card-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+  flex-shrink: 0;
+}
+
+.req-card-chevron.is-open {
+  transform: rotate(180deg);
 }
 
 .req-card-title {
@@ -1105,17 +1120,61 @@ input:-webkit-autofill:active {
   border: 1px solid rgba(139, 92, 246, 0.25);
 }
 
-.tc-table-wrap {
-  overflow-x: auto;
-  border-radius: 0 0 6px 6px;
-}
-
 .tc-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 900px;
   table-layout: auto;
   min-width: 800px;
+}
+
+/* Xem trước Test Cases trong RequirementViewer — danh sách gọn (không phải bảng rộng
+   nhiều cột) vì panel này nằm trong drawer hẹp; bảng đầy đủ chỉ hiện ở Tester Studio,
+   nơi có bề ngang phù hợp. Tách riêng để hai nơi không còn tranh layout với nhau. */
+.tc-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-soft);
+}
+
+.tc-preview-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg);
+}
+
+.tc-preview-id {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  padding-top: 1px;
+}
+
+.tc-preview-body {
+  min-width: 0;
+}
+
+.tc-preview-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.tc-preview-expected {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-preview-cta {
+  width: 100%;
+  justify-content: center;
+  border-radius: 0 0 8px 8px;
 }
 
 /* Header nhóm requirement (bấm để gập/mở) — hover làm tối nhẹ. Dùng filter thay vì đổi
@@ -2271,7 +2330,7 @@ dialog.confirm-dialog[open]::backdrop {
 }
 
 .tcs-view-header {
-  padding: 20px 28px 16px;
+  padding: 24px 32px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-surface);
   flex-shrink: 0;
@@ -2302,11 +2361,12 @@ dialog.confirm-dialog[open]::backdrop {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
-  background: var(--purple-dim);
-  color: var(--purple);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
   flex-shrink: 0;
 }
 
@@ -2361,7 +2421,7 @@ dialog.confirm-dialog[open]::backdrop {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 18px;
+  padding: 18px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
@@ -2372,7 +2432,7 @@ dialog.confirm-dialog[open]::backdrop {
 .tcs-project-card:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .tcs-project-card:active {
@@ -2568,8 +2628,24 @@ dialog.confirm-dialog[open]::backdrop {
 .tc-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto;
-  min-width: 800px;
+  /* table-layout: fixed để các cột tuân thủ ĐÚNG % width đặt trên <th>. Với auto (mặc định),
+     chuỗi test_data một dòng dài sẽ giành hết chiều rộng và làm các cột giãn lệch, để lại
+     khoảng trống lớn ở Test Steps/Test Data trên màn hình rộng. Fixed + break-word bên dưới
+     ép nội dung dài xuống dòng trong đúng ô của nó. */
+  table-layout: fixed;
+  min-width: 1200px;
+}
+
+/* Nội dung dài (test_data, expected_result, và test_steps trong <ol><li>) phải xuống dòng
+   trong ô, kể cả chuỗi không dấu cách như mật khẩu 128 ký tự. Dùng overflow-wrap: anywhere
+   (không phải break-word) vì 'anywhere' còn tác động tới kích thước min-content — cần thiết
+   để block lồng bên trong ô (như <ol><li> của Test Steps) co lại và ngắt chuỗi thay vì tràn
+   ra ngoài ô khi table-layout: fixed. Áp cả cho ol/li để chắc chắn cascade tới nội dung. */
+.tc-table td,
+.tc-table td ol,
+.tc-table td li {
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .tc-table tbody tr {

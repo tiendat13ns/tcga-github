@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from app.models import Requirement, TestCase
+from app.models import Document, Requirement, TestCase
 
 
 class RequirementRepository:
@@ -71,3 +71,32 @@ class RequirementRepository:
             )
             .all()
         )
+
+    def list_latest_by_project_id(self, project_id: UUID) -> dict[UUID, list[Requirement]]:
+        """Trả về requirements (chỉ version mới nhất) của TOÀN BỘ document trong project,
+        gom nhóm theo document_id — 1 query duy nhất thay vì gọi list_latest_by_document_id()
+        lặp lại cho từng document (N+1), dùng cho trang danh sách document.
+
+        Lọc qua Document.project_id (JOIN) thay vì Requirement.project_id trực tiếp: cột
+        Requirement.project_id nullable và có thể chưa được set ở các requirement tạo từ
+        trước, trong khi Requirement.document_id luôn đáng tin cậy và Document.project_id
+        là nguồn sự thật mà trang danh sách document đang dùng để lọc."""
+        rows = (
+            self.db.query(Requirement)
+            .join(Document, Requirement.document_id == Document.id)
+            .filter(Document.project_id == project_id)
+            .order_by(Requirement.document_id, Requirement.version.desc())
+            .all()
+        )
+        by_document: dict[UUID, list[Requirement]] = {}
+        latest_version_seen: dict[UUID, int] = {}
+        for req in rows:
+            if req.document_id is None:
+                continue
+            seen_version = latest_version_seen.get(req.document_id)
+            if seen_version is None:
+                latest_version_seen[req.document_id] = req.version
+                by_document[req.document_id] = [req]
+            elif req.version == seen_version:
+                by_document[req.document_id].append(req)
+        return by_document

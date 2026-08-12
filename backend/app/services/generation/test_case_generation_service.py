@@ -22,9 +22,10 @@ from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.database import SessionLocal, is_database_configured
-from app.models import Requirement, TestCase
+from app.models import Requirement, TestCase, User
 from app.repositories.test_case_repository import TestCaseRepository
 from app.schemas.test_case_schema import GenerateTestCasesResponse, ListTestCasesResponse, TestCaseResponse
+from app.services.credit_service import deduct_user_credits
 from app.services.rag.retrieval_service import retrieve_relevant_chunks_async
 from app.services.agent.workflow_service import generate_test_cases_node
 
@@ -230,6 +231,40 @@ async def generate_test_cases_from_requirement(requirement_id: str) -> GenerateT
     except SQLAlchemyError as exc:
         db_error = str(exc.orig) if hasattr(exc, "orig") and exc.orig else str(exc)
         raise TestCaseGenerationError(f"Database save failed: {db_error}") from exc
+
+
+def set_requirement_test_case_status(requirement_id: str, status: str | None, error: str | None) -> None:
+    """Cập nhật trạng thái sinh test case của requirement (None/"generating"/"failed") vào DB
+    — nguồn sự thật để frontend poll. Mở session riêng nên gọi được từ background task."""
+    if not is_database_configured():
+        return
+    try:
+        with SessionLocal() as db:
+            req = db.get(Requirement, UUID(requirement_id))
+            if req is not None:
+                req.test_case_status = status
+                req.test_case_error = error
+                db.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not update test_case_status for requirement %s", requirement_id)
+
+
+async def run_test_case_generation_job(requirement_id: str, user_id: str) -> None:
+    """Background job: sinh test case rồi trừ credit khi thành công, đánh dấu "failed" nếu lỗi.
+    Tự quản session riêng — không dùng session/request của endpoint."""
+    try:
+        await generate_test_cases_from_requirement(requirement_id)
+    except Exception as exc:  # noqa: BLE001
+        set_requirement_test_case_status(requirement_id, "failed", str(exc)[:500])
+        raise
+    try:
+        with SessionLocal() as db:
+            user = db.get(User, UUID(user_id))
+            if user is not None:
+                deduct_user_credits(db, user, "TEST_CASE_GENERATION")
+    except Exception:  # noqa: BLE001
+        logger.exception("Test cases generated but credit deduction failed for user %s", user_id)
+    set_requirement_test_case_status(requirement_id, None, None)
 
 
 def list_test_cases_by_requirement(requirement_id: str) -> ListTestCasesResponse:

@@ -352,10 +352,15 @@ export default function TestCaseTableView({
                               z-index < thead (10) để nhãn cột vẫn nằm trên; > dòng dữ liệu để che chúng. */}
                           <td colSpan={11} style={{ background: "var(--accent-dim)", borderTop: "2px solid var(--border)", padding: "9px 14px", position: "sticky", top: "34px", zIndex: 9 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                              <ChevronDown size={15} strokeWidth={2}
-                                style={{ transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", flexShrink: 0, color: "var(--text-secondary)" }} />
-                              <span style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-primary)" }}>{g.label}</span>
-                              <span className="tc-count-badge">{g.items.length}</span>
+                              {/* Sticky theo cả trục ngang (left) — bảng có 11 cột phải cuộn ngang mới xem
+                                  hết, nếu không sticky trục này thì tên requirement/chevron/số lượng sẽ
+                                  trôi mất khỏi màn hình ngay khi người dùng cuộn phải. */}
+                              <div style={{ position: "sticky", left: "14px", display: "flex", alignItems: "center", gap: "10px", background: "var(--accent-dim)" }}>
+                                <ChevronDown size={15} strokeWidth={2}
+                                  style={{ transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", flexShrink: 0, color: "var(--text-secondary)" }} />
+                                <span style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", whiteSpace: "nowrap" }}>{g.label}</span>
+                                <span className="tc-count-badge">{g.items.length}</span>
+                              </div>
                               <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "var(--text-secondary)" }}>
                                 {summary.Pass > 0 && (
                                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FolderGit2 } from "lucide-react";
 import { Project } from "./ProjectManager";
 import DocumentUpload from "../Documents/DocumentUpload";
 import DocumentList from "../Documents/DocumentList";
@@ -44,36 +45,36 @@ export default function ProjectDetailDashboard({ project }: ProjectDetailDashboa
       {activeTab === "dashboard" ? (
         <>
           {/* Project Header */}
-          <div style={{
-            padding: "24px 32px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            backgroundColor: "var(--bg-surface)"
-          }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <h2 style={{ margin: 0, fontSize: "24px", fontWeight: "600" }}>{project.name}</h2>
-                <span className="badge badge-completed">Active</span>
+          <div className="tcs-view-header">
+            <div className="tcs-view-title-row">
+              <div className="tcs-title">
+                <div className="tcs-title-icon">
+                  <FolderGit2 size={20} strokeWidth={1.75} />
+                </div>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{ fontSize: "20px", fontWeight: 700 }}>{project.name}</div>
+                    <span className="badge badge-completed">Active</span>
+                  </div>
+                  {project.description && (
+                    <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400, marginTop: "2px" }}>
+                      {project.description}
+                    </div>
+                  )}
+                </div>
               </div>
-              {project.description && (
-                <p style={{ margin: "8px 0 0 0", color: "var(--text-muted)", fontSize: "14px" }}>
-                  {project.description}
-                </p>
-              )}
-            </div>
 
-            <button
-              className="btn btn-primary"
-              style={{ padding: "8px 16px", borderRadius: "20px", display: "flex", gap: "8px", alignItems: "center" }}
-              onClick={() => setActiveTab("agent")}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-              </svg>
-              Work with Agent
-            </button>
+              <button
+                className="btn btn-primary"
+                style={{ padding: "8px 16px", borderRadius: "20px", display: "flex", gap: "8px", alignItems: "center" }}
+                onClick={() => setActiveTab("agent")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                Work with Agent
+              </button>
+            </div>
           </div>
 
           {/* Main Content Area */}

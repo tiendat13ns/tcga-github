@@ -1,14 +1,21 @@
 import { useState } from "react";
 import { Edit3, Save, Search, ShieldCheck, Users, X, Zap } from "lucide-react";
-import { AdminUser, useUpdateUserCredits } from "../../hooks/useAdmin";
+import { AdminUser, PlanKey, useUpdateUserCredits, useUpdateUserPlan } from "../../hooks/useAdmin";
 
 type UserTableProps = {
   users: AdminUser[];
   updateCreditsMutation: ReturnType<typeof useUpdateUserCredits>;
+  updatePlanMutation: ReturnType<typeof useUpdateUserPlan>;
   onShowToast: (msg: string) => void;
 };
 
-export default function UserTable({ users, updateCreditsMutation, onShowToast }: UserTableProps) {
+const PLAN_OPTIONS: { key: PlanKey; label: string; planName: string }[] = [
+  { key: "free", label: "Free", planName: "Free Plan" },
+  { key: "lite", label: "Lite", planName: "Lite Plan" },
+  { key: "pro", label: "Pro", planName: "Pro Plan" },
+];
+
+export default function UserTable({ users, updateCreditsMutation, updatePlanMutation, onShowToast }: UserTableProps) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editCreditValue, setEditCreditValue] = useState<number>(0);
 
@@ -31,13 +38,13 @@ export default function UserTable({ users, updateCreditsMutation, onShowToast }:
     }
   };
 
-  const handleQuickAddCredit = async (user: AdminUser, amount: number) => {
-    const newCredit = (user.credit_balance || 0) + amount;
+  // Đổi gói của user (độc lập với credit_balance) — plan quyết định quota upload/project.
+  const handleChangePlan = async (user: AdminUser, planKey: PlanKey, planLabel: string) => {
     try {
-      await updateCreditsMutation.mutateAsync({ userId: user.id, credit_balance: newCredit });
-      onShowToast(`Đã cộng +${amount} credits cho ${user.email} (Tổng: ${newCredit})`);
+      await updatePlanMutation.mutateAsync({ userId: user.id, plan: planKey });
+      onShowToast(`Đã chuyển ${user.email} sang gói ${planLabel}`);
     } catch (err: any) {
-      alert(err.message || "Cộng credit thất bại");
+      alert(err.message || "Đổi gói thất bại");
     }
   };
 
@@ -70,7 +77,7 @@ export default function UserTable({ users, updateCreditsMutation, onShowToast }:
           ) : (
             users.map((u) => {
               const isAdmin = u.role === "admin";
-              const userPlan = u.plan || (isAdmin || u.credit_balance >= 2000 ? "Pro Plan" : u.credit_balance >= 600 ? "Lite Plan" : "Free Plan");
+              const userPlan = u.plan || (isAdmin || u.credit_balance >= 1500 ? "Pro Plan" : u.credit_balance >= 600 ? "Lite Plan" : "Free Plan");
               const isEditing = editingUserId === u.id;
               const isUpdatingThisUser = updateCreditsMutation.isPending && updateCreditsMutation.variables?.userId === u.id;
 
@@ -127,72 +134,101 @@ export default function UserTable({ users, updateCreditsMutation, onShowToast }:
                     )}
                   </td>
 
-                  {/* Plan Badge */}
+                  {/* Plan Badge + đổi gói (plan độc lập với credit) */}
                   <td style={{ padding: "12px 16px" }}>
-                    {userPlan === "Pro Plan" ? (
-                      <span className="badge" style={{ fontSize: "11px", fontWeight: 600, background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid var(--border-soft)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                        <Zap size={12} strokeWidth={1.75} /> Pro Plan
-                      </span>
-                    ) : userPlan === "Lite Plan" ? (
-                      <span className="badge" style={{ fontSize: "11px", fontWeight: 600, background: "var(--bg-elevated)", color: "var(--text-primary)", border: "1px solid var(--border-soft)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                        <Zap size={12} strokeWidth={1.75} /> Lite Plan
-                      </span>
-                    ) : (
-                      <span className="badge" style={{ fontSize: "11px", fontWeight: 500, background: "var(--bg-surface)", color: "var(--text-muted)", border: "1px solid var(--border-soft)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                        Free Plan
-                      </span>
-                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-start" }}>
+                      {userPlan === "Pro Plan" ? (
+                        <span className="badge" style={{ fontSize: "11px", fontWeight: 600, background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid var(--border-soft)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <Zap size={12} strokeWidth={1.75} /> Pro Plan
+                        </span>
+                      ) : userPlan === "Lite Plan" ? (
+                        <span className="badge" style={{ fontSize: "11px", fontWeight: 600, background: "var(--bg-elevated)", color: "var(--text-primary)", border: "1px solid var(--border-soft)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <Zap size={12} strokeWidth={1.75} /> Lite Plan
+                        </span>
+                      ) : (
+                        <span className="badge" style={{ fontSize: "11px", fontWeight: 500, background: "var(--bg-surface)", color: "var(--text-muted)", border: "1px solid var(--border-soft)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          Free Plan
+                        </span>
+                      )}
+
+                      {!isAdmin && (
+                        <div style={{ display: "flex", gap: "4px" }}>
+                          {PLAN_OPTIONS.map(({ key, label, planName }) => {
+                            const isCurrent = userPlan === planName;
+                            const isUpdatingThis = updatePlanMutation.isPending && updatePlanMutation.variables?.userId === u.id && updatePlanMutation.variables?.plan === key;
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                disabled={isCurrent || isUpdatingThis}
+                                style={{
+                                  height: "22px",
+                                  padding: "0 9px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  borderRadius: "4px",
+                                  background: isCurrent ? "var(--accent)" : "var(--bg-elevated)",
+                                  color: isCurrent ? "#fff" : "var(--text-secondary)",
+                                  border: `1px solid ${isCurrent ? "var(--accent)" : "var(--border-soft)"}`,
+                                  cursor: isCurrent ? "default" : "pointer",
+                                  transition: "all var(--transition)",
+                                  whiteSpace: "nowrap",
+                                }}
+                                onClick={() => handleChangePlan(u, key, label)}
+                                title={isCurrent ? `User đang ở gói ${label}` : `Đổi sang gói ${label}`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   {/* Credit Balance */}
                   <td style={{ padding: "12px 16px" }}>
                     {isEditing ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          height: "32px",
+                          padding: "0 10px",
+                          width: "120px",
+                          background: "var(--bg-surface)",
+                          border: "1px solid var(--accent)",
+                          borderRadius: "var(--radius-input)",
+                          boxShadow: "0 0 0 3px var(--accent-glow)",
+                        }}
+                      >
+                        <Zap size={14} strokeWidth={1.75} style={{ color: "var(--accent)", flexShrink: 0 }} />
                         <input
                           type="number"
-                          className="input"
                           value={editCreditValue}
                           onChange={(e) => setEditCreditValue(parseInt(e.target.value) || 0)}
-                          style={{ width: "100px", height: "30px", fontSize: "13px", padding: "0 8px" }}
+                          style={{
+                            width: "100%",
+                            minWidth: 0,
+                            height: "100%",
+                            border: "none",
+                            outline: "none",
+                            background: "transparent",
+                            color: "var(--text-primary)",
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            padding: 0,
+                          }}
                           autoFocus
                         />
                       </div>
                     ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "5px", fontWeight: 700 }}>
-                          <Zap size={14} strokeWidth={1.75} style={{ color: "var(--accent)" }} />
-                          <span style={{ fontSize: "14px", color: u.credit_balance < 20 ? "var(--danger)" : "var(--text-primary)" }}>
-                            {u.credit_balance.toLocaleString()}
-                          </span>
-                        </div>
-
-                        {/* Quick add credit buttons */}
-                        {!isAdmin && (
-                          <div style={{ display: "flex", gap: "4px", marginLeft: "6px" }}>
-                            {[50, 100, 500].map((amt) => (
-                              <button
-                                key={amt}
-                                type="button"
-                                style={{
-                                  height: "22px",
-                                  padding: "0 7px",
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                  borderRadius: "4px",
-                                  background: "var(--accent-glow)",
-                                  color: "var(--accent)",
-                                  border: "1px solid var(--border-soft)",
-                                  cursor: "pointer",
-                                  transition: "all var(--transition)",
-                                }}
-                                onClick={() => handleQuickAddCredit(u, amt)}
-                                title={`Cộng nhanh +${amt} Credits`}
-                              >
-                                +{amt}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontWeight: 700 }}>
+                        <Zap size={14} strokeWidth={1.75} style={{ color: "var(--accent)" }} />
+                        <span style={{ fontSize: "14px", color: u.credit_balance < 20 ? "var(--danger)" : "var(--text-primary)" }}>
+                          {u.credit_balance.toLocaleString()}
+                        </span>
                       </div>
                     )}
                   </td>

@@ -52,6 +52,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _ensure_user_columns()
+    _backfill_user_plan()
     _backfill_documents_uploaded_total()
     _ensure_project_columns()
     _ensure_document_columns()
@@ -112,6 +113,8 @@ def _ensure_document_columns() -> None:
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS extracted_text TEXT",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS error_message TEXT",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS requirement_status TEXT",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS requirement_error TEXT",
     ]
 
     with engine.begin() as connection:
@@ -167,6 +170,8 @@ def _ensure_requirement_hitl_columns() -> None:
     statements = [
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS clarifying_questions JSON",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS user_answers JSON",
+        "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS test_case_status TEXT",
+        "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS test_case_error TEXT",
     ]
     with engine.begin() as connection:
         for statement in statements:
@@ -232,6 +237,11 @@ def _ensure_user_columns() -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance INTEGER NOT NULL DEFAULT 200",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS documents_uploaded_total INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE",
+        # Cột plan thêm dạng NULLABLE (không DEFAULT) để _backfill_user_plan phân biệt được
+        # hàng "chưa từng set" (NULL) và điền plan đúng theo credit_balance cũ. User mới tạo
+        # qua register/ORM luôn có plan='free' (default ở model), nên NULL chỉ tồn tại thoáng
+        # qua ở các hàng cũ trước migration.
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT",
     ]
     with engine.begin() as connection:
         for statement in statements:
@@ -239,6 +249,28 @@ def _ensure_user_columns() -> None:
                 connection.execute(text(statement))
             except Exception:
                 pass
+
+
+def _backfill_user_plan() -> None:
+    """
+    Điền plan cho user cũ (plan IS NULL) dựa trên credit_balance theo ngưỡng cũ, để không ai
+    bị mất quyền lợi khi migrate sang mô hình plan độc lập. Chỉ đụng hàng NULL nên hoàn toàn
+    idempotent — sau khi set, admin đổi plan tay sẽ không bị ghi đè ở các lần restart sau.
+    """
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("""
+                UPDATE users
+                SET plan = CASE
+                    WHEN credit_balance >= 1500 THEN 'pro'
+                    WHEN credit_balance >= 600 THEN 'lite'
+                    ELSE 'free'
+                END
+                WHERE plan IS NULL;
+            """))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Could not backfill user plan: %s", exc)
 
 
 def _backfill_documents_uploaded_total() -> None:

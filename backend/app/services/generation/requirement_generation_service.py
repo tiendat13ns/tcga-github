@@ -21,9 +21,15 @@ from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.database import SessionLocal, is_database_configured
-from app.models import Document, Requirement
+from app.models import Document, Requirement, User
 from app.repositories.requirement_repository import RequirementRepository
-from app.schemas.requirement_schema import GenerateRequirementsResponse, ListRequirementsResponse, RequirementResponse
+from app.services.credit_service import deduct_user_credits
+from app.schemas.requirement_schema import (
+    BulkRequirementsResponse,
+    GenerateRequirementsResponse,
+    ListRequirementsResponse,
+    RequirementResponse,
+)
 from app.services.rag.retrieval_service import retrieve_relevant_chunks_async
 from app.services.agent.workflow_service import extract_requirements_node
 
@@ -78,6 +84,8 @@ def _requirement_to_response(requirement: Requirement) -> RequirementResponse:
         version=requirement.version,
         clarifying_questions=_coerce_to_list(requirement.clarifying_questions),
         user_answers=_coerce_to_list(requirement.user_answers),
+        test_case_status=requirement.test_case_status,
+        test_case_error=requirement.test_case_error,
     )
 
 
@@ -215,6 +223,41 @@ async def generate_requirements_from_document(document_id: str) -> GenerateRequi
         raise RequirementGenerationError("Database save failed") from exc
 
 
+def set_document_requirement_status(document_id: str, status: str | None, error: str | None) -> None:
+    """Cập nhật trạng thái sinh requirement của document (None/"generating"/"failed") vào DB
+    — nguồn sự thật để frontend poll. Mở session riêng nên gọi được từ background task."""
+    if not is_database_configured():
+        return
+    try:
+        with SessionLocal() as db:
+            doc = db.get(Document, UUID(document_id))
+            if doc is not None:
+                doc.requirement_status = status
+                doc.requirement_error = error
+                db.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not update requirement_status for document %s", document_id)
+
+
+async def run_requirement_generation_job(document_id: str, user_id: str) -> None:
+    """Background job: sinh requirement rồi trừ credit khi thành công, cập nhật trạng thái
+    "failed" nếu lỗi. Tự quản session riêng — không dùng session/request của endpoint."""
+    try:
+        await generate_requirements_from_document(document_id)
+    except Exception as exc:  # noqa: BLE001
+        set_document_requirement_status(document_id, "failed", str(exc)[:500])
+        raise
+    # Thành công: trừ credit + xoá trạng thái generating.
+    try:
+        with SessionLocal() as db:
+            user = db.get(User, UUID(user_id))
+            if user is not None:
+                deduct_user_credits(db, user, "REQUIREMENT_EXTRACTION")
+    except Exception:  # noqa: BLE001
+        logger.exception("Requirement generated but credit deduction failed for user %s", user_id)
+    set_document_requirement_status(document_id, None, None)
+
+
 def list_requirements_by_document(document_id: str) -> ListRequirementsResponse:
     if not is_database_configured():
         raise RequirementGenerationError("Database is not configured")
@@ -232,4 +275,31 @@ def list_requirements_by_document(document_id: str) -> ListRequirementsResponse:
             document_id=str(document_uuid),
             total_requirements=len(requirements),
             requirements=[_requirement_to_response(req) for req in requirements],
+        )
+
+
+def list_requirements_by_project(project_id: str) -> BulkRequirementsResponse:
+    """Trả về requirements của mọi document trong project bằng 1 query — dùng để tránh
+    trang danh sách document phải gọi list_requirements_by_document() N lần (1 lần/document)."""
+    if not is_database_configured():
+        raise RequirementGenerationError("Database is not configured")
+
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError as exc:
+        raise RequirementGenerationNotFoundError("Project not found.") from exc
+
+    with SessionLocal() as db:
+        repository = RequirementRepository(db)
+        grouped = repository.list_latest_by_project_id(project_uuid)
+
+        return BulkRequirementsResponse(
+            documents={
+                str(document_id): ListRequirementsResponse(
+                    document_id=str(document_id),
+                    total_requirements=len(reqs),
+                    requirements=[_requirement_to_response(req) for req in reqs],
+                )
+                for document_id, reqs in grouped.items()
+            }
         )

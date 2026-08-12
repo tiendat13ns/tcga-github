@@ -1,3 +1,5 @@
+import { useScrollReveal } from "./useScrollReveal";
+
 const STEPS = [
   {
     number: "01",
@@ -26,15 +28,17 @@ const STEPS = [
 ];
 
 export default function LandingHowItWorks() {
+  const revealRef = useScrollReveal<HTMLDivElement>();
+
   return (
     <section className="landing-how" id="how-it-works">
-      <div className="landing-how-inner">
+      <div className="landing-how-inner landing-reveal" ref={revealRef}>
         <span className="landing-section-eyebrow">Cách hoạt động</span>
         <h2 className="landing-section-title">
           Từ tài liệu thô đến bộ Test Case hoàn chỉnh<br />chỉ trong 4 bước
         </h2>
 
-        <div className="landing-how-steps">
+        <div className="landing-how-steps landing-reveal-stagger">
           {STEPS.map((step, idx) => (
             <div className="landing-how-step" key={step.number}>
               <div className="landing-how-step-number-col">

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { Project } from "../components/Projects/ProjectManager";
 import { useProjects } from "./useProjects";
 
-export type ViewType = "overview" | "projects" | "project_detail" | "test_cases" | "usage" | "tutorial" | "admin";
+export type ViewType = "overview" | "projects" | "project_detail" | "test_cases" | "usage" | "tutorial" | "admin" | "settings" | "admin_feedback";
 
 const VIEW_TO_PATH: Record<Exclude<ViewType, "project_detail">, string> = {
   overview: "/overview",
@@ -11,6 +11,8 @@ const VIEW_TO_PATH: Record<Exclude<ViewType, "project_detail">, string> = {
   usage: "/usage",
   tutorial: "/tutorial",
   admin: "/admin",
+  settings: "/settings",
+  admin_feedback: "/admin/feedback",
 };
 
 function pathToView(pathname: string): { view: ViewType; projectId: string | null } {
@@ -19,12 +21,14 @@ function pathToView(pathname: string): { view: ViewType; projectId: string | nul
     const id = p.slice("/projects/".length);
     if (id) return { view: "project_detail", projectId: id };
   }
+  if (p === "/admin/feedback") return { view: "admin_feedback", projectId: null };
   if (p === "/admin") return { view: "admin", projectId: null };
   if (p === "/overview") return { view: "overview", projectId: null };
   if (p === "/projects") return { view: "projects", projectId: null };
   if (p === "/test-cases") return { view: "test_cases", projectId: null };
   if (p === "/usage") return { view: "usage", projectId: null };
   if (p === "/tutorial") return { view: "tutorial", projectId: null };
+  if (p === "/settings") return { view: "settings", projectId: null };
   // Default: /overview
   return { view: "overview", projectId: null };
 }
@@ -115,7 +119,7 @@ export function useAppRouter(isAuthenticated: boolean, user: AuthedUser) {
   // vẽ → không nháy thoáng màn hình admin/trống.
   useLayoutEffect(() => {
     if (!isAuthenticated || !user) return;
-    if (activeView === "admin" && user.role !== "admin") {
+    if ((activeView === "admin" || activeView === "admin_feedback") && user.role !== "admin") {
       setActiveView("overview");
       setPathname("/overview");
       window.history.replaceState(null, "", "/overview");
@@ -128,7 +132,7 @@ export function useAppRouter(isAuthenticated: boolean, user: AuthedUser) {
   // Tăng key này mỗi lần điều hướng tới "test_cases" để ép re-mount, reset về màn hình gốc.
   const [testerStudioResetKey, setTesterStudioResetKey] = useState(0);
 
-  const handleNavigate = (view: "overview" | "projects" | "test_cases" | "usage" | "tutorial" | "admin") => {
+  const handleNavigate = (view: "overview" | "projects" | "test_cases" | "usage" | "tutorial" | "admin" | "settings" | "admin_feedback") => {
     setActiveView(view);
     setSelectedProject(null);
     setPendingProjectId(null);

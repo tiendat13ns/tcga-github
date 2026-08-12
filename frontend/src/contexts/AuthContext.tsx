@@ -6,7 +6,9 @@ type User = {
   id: string;
   email: string;
   role: string;
+  plan?: string;
   credit_balance: number;
+  created_at?: string;
 };
 
 type AuthContextType = {

@@ -7,7 +7,7 @@ from typing import Optional
 from app.database import SessionLocal
 from app.routers.auth import get_current_user
 from app.models import User, UsageLog
-from app.services.credit_service import resolve_user_plan
+from app.services.credit_service import PLAN_DEFINITIONS, PLAN_ORDER, get_plan_key
 
 router = APIRouter(prefix="/api/usage", tags=["usage"])
 logger = logging.getLogger(__name__)
@@ -36,42 +36,29 @@ def get_usage_summary(
         or 0
     )
 
-    plan_name, _limit = resolve_user_plan(current_user)
+    current_key = get_plan_key(current_user)
+
+    # Dựng danh sách gói từ nguồn sự thật duy nhất (PLAN_DEFINITIONS). Free là gói tự phục vụ
+    # (active); Lite/Pro hiện chỉ cấp qua admin nên đánh dấu coming_soon cho phần mua tự động.
+    plans = []
+    for key in PLAN_ORDER:
+        d = PLAN_DEFINITIONS[key]
+        plans.append({
+            "name": d["name"],
+            "status": "active" if key == "free" else "coming_soon",
+            "price_vnd": d["price_vnd"],
+            "credits_per_month": d["credits_per_month"],
+            "max_documents": d["max_documents"],
+            "max_projects": d["max_projects"],
+            "storage_mb": d["storage_mb"],
+        })
 
     return {
         "credit_balance": current_user.credit_balance,
-        "current_plan": f"{plan_name} Plan",
+        "current_plan": PLAN_DEFINITIONS[current_key]["name"],
         "plan_status": "active",
         "total_credits_used": int(total_used),
-        "plans": [
-            {
-                "name": "Free Plan",
-                "status": "active",
-                "price_vnd": 0,
-                "credits_per_month": 200,
-                "max_documents": 5,
-                "max_projects": 3,
-                "storage_mb": 50,
-            },
-            {
-                "name": "Lite Plan",
-                "status": "coming_soon",
-                "price_vnd": 50000,
-                "credits_per_month": 600,
-                "max_documents": 15,
-                "max_projects": 10,
-                "storage_mb": 500,
-            },
-            {
-                "name": "Pro Plan",
-                "status": "coming_soon",
-                "price_vnd": 150000,
-                "credits_per_month": 2000,
-                "max_documents": None,
-                "max_projects": None,
-                "storage_mb": 2048,
-            },
-        ],
+        "plans": plans,
     }
 
 

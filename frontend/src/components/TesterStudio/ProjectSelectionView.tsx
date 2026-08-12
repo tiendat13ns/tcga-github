@@ -1,6 +1,6 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, FlaskConical } from "lucide-react";
 import { Project } from "../Projects/ProjectManager";
-import { ChevronRightIcon, CheckSquareIcon, FlaskIcon, FolderIcon, PlusIcon, timeAgo } from "./shared";
+import { ChevronRightIcon, CheckSquareIcon, FolderIcon, PlusIcon, timeAgo } from "./shared";
 
 type ProjectSelectionViewProps = {
   projects: Project[];
@@ -15,9 +15,9 @@ export default function ProjectSelectionView({ projects, isLoadingProjects, onSe
       <div className="tcs-view-header">
         <div className="tcs-view-title-row">
           <div className="tcs-title">
-            <div className="tcs-title-icon" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}><FlaskIcon /></div>
+            <div className="tcs-title-icon"><FlaskConical size={20} strokeWidth={1.75} /></div>
             <div>
-              <div style={{ fontSize: "20px", fontWeight: 600 }}>Tester Studio</div>
+              <div style={{ fontSize: "20px", fontWeight: 700 }}>Tester Studio</div>
               <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400, marginTop: "2px" }}>
                 Select a project to start testing
               </div>

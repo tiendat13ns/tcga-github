@@ -94,6 +94,16 @@ export default function TestCaseFormDrawer({ isOpen, title, draft, onDraftChange
           </select>
         </div>
 
+        <div>
+          <div style={fieldLabelStyle}>Note</div>
+          <textarea
+            value={draft.note || ""}
+            onChange={(e) => onDraftChange((prev) => ({ ...prev, note: e.target.value }))}
+            style={{ ...textareaStyle, minHeight: "56px" }}
+            placeholder="Ghi chú thêm (tuỳ chọn)..."
+          />
+        </div>
+
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             onClick={onSave}

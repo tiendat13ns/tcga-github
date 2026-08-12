@@ -1,4 +1,5 @@
 import { CheckCircle2, ClipboardList, TestTubeDiagonal, Users } from "lucide-react";
+import { useScrollReveal } from "./useScrollReveal";
 
 const ROLES = [
   {
@@ -34,15 +35,17 @@ const ROLES = [
 ];
 
 export default function LandingWhoItsFor() {
+  const revealRef = useScrollReveal<HTMLDivElement>();
+
   return (
     <section className="landing-whofor" id="who-its-for">
-      <div className="landing-whofor-inner">
+      <div className="landing-whofor-inner landing-reveal" ref={revealRef}>
         <span className="landing-section-eyebrow">Dành cho ai</span>
         <h2 className="landing-section-title">
           Một nền tảng, phục vụ đúng nhu cầu<br />của từng vai trò trong đội ngũ
         </h2>
 
-        <div className="landing-whofor-grid">
+        <div className="landing-whofor-grid landing-reveal-stagger">
           {ROLES.map(({ icon: Icon, role, description, points }) => (
             <div className="landing-whofor-card" key={role}>
               <div className="landing-whofor-card-icon">

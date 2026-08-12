@@ -1,12 +1,16 @@
+import { useScrollReveal } from "./useScrollReveal";
+
 type LandingCtaProps = {
   isAuthenticated: boolean;
   onPrimaryCta: () => void;
 };
 
 export default function LandingCta({ isAuthenticated, onPrimaryCta }: LandingCtaProps) {
+  const revealRef = useScrollReveal<HTMLDivElement>();
+
   return (
     <section className="landing-cta">
-      <div className="landing-cta-inner">
+      <div className="landing-cta-inner landing-reveal" ref={revealRef}>
         <h2 className="landing-cta-title">
           Sẵn sàng rút ngắn thời gian viết Requirement và Test Case?
         </h2>

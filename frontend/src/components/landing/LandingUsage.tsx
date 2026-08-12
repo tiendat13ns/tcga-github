@@ -1,4 +1,5 @@
 import { FileText, FolderGit2, HardDrive, Zap } from "lucide-react";
+import { useScrollReveal } from "./useScrollReveal";
 
 // Khớp đúng dữ liệu thật trả về từ backend: GET /api/usage/summary (backend/app/routers/usage.py)
 const PLANS = [
@@ -14,7 +15,7 @@ const PLANS = [
   {
     name: "Lite Plan",
     status: "coming_soon" as const,
-    priceVnd: 50000,
+    priceVnd: 99000,
     creditsPerMonth: 600,
     maxDocuments: 15,
     maxProjects: 10,
@@ -23,8 +24,8 @@ const PLANS = [
   {
     name: "Pro Plan",
     status: "coming_soon" as const,
-    priceVnd: 150000,
-    creditsPerMonth: 2000,
+    priceVnd: 199000,
+    creditsPerMonth: 1500,
     maxDocuments: null,
     maxProjects: null,
     storageMb: 2048,
@@ -46,9 +47,11 @@ type LandingUsageProps = {
 };
 
 export default function LandingUsage({ isAuthenticated, onPrimaryCta }: LandingUsageProps) {
+  const revealRef = useScrollReveal<HTMLDivElement>();
+
   return (
     <section className="landing-usage" id="usage">
-      <div className="landing-usage-inner">
+      <div className="landing-usage-inner landing-reveal" ref={revealRef}>
         <span className="landing-section-eyebrow">Usage</span>
         <h2 className="landing-section-title">
           Trả phí theo mức sử dụng thực tế,<br />không cam kết dài hạn
@@ -58,7 +61,7 @@ export default function LandingUsage({ isAuthenticated, onPrimaryCta }: LandingU
           Bắt đầu miễn phí, nâng cấp khi cần nhiều Credit hơn.
         </p>
 
-        <div className="landing-usage-grid">
+        <div className="landing-usage-grid landing-reveal-stagger">
           {PLANS.map((plan) => {
             const isComingSoon = plan.status === "coming_soon";
             return (

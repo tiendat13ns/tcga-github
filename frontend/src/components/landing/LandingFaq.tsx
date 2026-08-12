@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { useScrollReveal } from "./useScrollReveal";
 
 const FAQ_ITEMS = [
   {
@@ -46,6 +47,7 @@ function FaqItem({ q, a, isOpen, onToggle }: { q: string; a: string; isOpen: boo
 
 export default function LandingFaq() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const revealRef = useScrollReveal<HTMLDivElement>();
 
   const faqJsonLd = {
     "@context": "https://schema.org",
@@ -62,11 +64,11 @@ export default function LandingFaq() {
 
   return (
     <section className="landing-faq" id="faq">
-      <div className="landing-faq-inner">
+      <div className="landing-faq-inner landing-reveal" ref={revealRef}>
         <span className="landing-section-eyebrow">FAQ</span>
         <h2 className="landing-section-title">Câu hỏi thường gặp</h2>
 
-        <div className="landing-faq-list">
+        <div className="landing-faq-list landing-reveal-stagger">
           {FAQ_ITEMS.map((item, idx) => (
             <FaqItem
               key={item.q}

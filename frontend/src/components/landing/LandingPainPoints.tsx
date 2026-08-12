@@ -1,4 +1,5 @@
 import { FileStack, ListChecks, RefreshCcw, Timer } from "lucide-react";
+import { useScrollReveal } from "./useScrollReveal";
 
 const PAIN_POINTS = [
   {
@@ -24,15 +25,17 @@ const PAIN_POINTS = [
 ];
 
 export default function LandingPainPoints() {
+  const revealRef = useScrollReveal<HTMLDivElement>();
+
   return (
     <section className="landing-pain">
-      <div className="landing-pain-inner">
+      <div className="landing-pain-inner landing-reveal" ref={revealRef}>
         <span className="landing-section-eyebrow">Vấn đề thường gặp</span>
         <h2 className="landing-section-title">
           Phân tích tài liệu và viết test case thủ công<br />đang tốn quá nhiều thời gian của bạn
         </h2>
 
-        <div className="landing-pain-grid">
+        <div className="landing-pain-grid landing-reveal-stagger">
           {PAIN_POINTS.map(({ icon: Icon, title, description }) => (
             <div className="landing-pain-card" key={title}>
               <div className="landing-pain-card-icon">

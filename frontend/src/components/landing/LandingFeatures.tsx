@@ -1,4 +1,5 @@
 import { FileSearch, FlaskConical, MessageSquareText, NotebookPen, Rows3, ShieldCheck } from "lucide-react";
+import { useScrollReveal } from "./useScrollReveal";
 
 const FEATURES = [
   {
@@ -34,15 +35,17 @@ const FEATURES = [
 ];
 
 export default function LandingFeatures() {
+  const revealRef = useScrollReveal<HTMLDivElement>();
+
   return (
     <section className="landing-features" id="features">
-      <div className="landing-features-inner">
+      <div className="landing-features-inner landing-reveal" ref={revealRef}>
         <span className="landing-section-eyebrow">Tính năng</span>
         <h2 className="landing-section-title">
           Mọi công cụ Tester & BA cần,<br />gói gọn trong một nền tảng
         </h2>
 
-        <div className="landing-features-grid">
+        <div className="landing-features-grid landing-reveal-stagger">
           {FEATURES.map(({ icon: Icon, title, description }) => (
             <div className="landing-feature-card" key={title}>
               <div className="landing-feature-card-icon">

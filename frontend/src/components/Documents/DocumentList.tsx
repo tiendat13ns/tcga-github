@@ -1,14 +1,15 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { DocumentItem } from "../../App";
 import type { GenerateRequirementsResponse } from "../RequirementViewer";
-import { useProjectDocuments, useDeleteDocument, useClearDocuments, useAddDocumentsToCache } from "../../hooks/useDocuments";
+import { useProjectDocuments, useDeleteDocument, useClearDocuments, useAddDocumentsToCache, documentKeys } from "../../hooks/useDocuments";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "../../lib/api";
 import ConfirmDialog from "../ConfirmDialog";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const API_V1_DOCUMENTS_URL = `${API_BASE}/api/v1/documents`;
-const API_V1_REQUIREMENTS_URL = `${API_BASE}/api/v1/requirements`;
+const API_V1_PROJECTS_URL = `${API_BASE}/api/v1/projects`;
 
 type DocumentListProps = {
   projectId: string | null;
@@ -53,40 +54,59 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
   const clearDocsMutation = useClearDocuments(projectId);
   const addToCache = useAddDocumentsToCache(projectId);
   const { refreshUser } = useAuth();  // để cập nhật số credit ở sidebar sau khi generate (bị trừ credit)
+  const queryClient = useQueryClient();
 
   const [message, setMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [generatingRequirementsId, setGeneratingRequirementsId] = useState<string | null>(null);
-  const [generatingTestCasesId, setGeneratingTestCasesId] = useState<string | null>(null);
-  const [tcProgress, setTcProgress] = useState<{ done: number; total: number } | null>(null);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);  // đang gửi POST generate (trước khi server xác nhận)
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [existingRequirements, setExistingRequirements] = useState<Record<string, GenerateRequirementsResponse | null>>({});
-  const [isLoadingRequirements, setIsLoadingRequirements] = useState<Record<string, boolean>>({});
+  const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<DocumentItem | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  // Load existing requirements for completed docs
+  // Có document nào đang sinh requirement ở nền không → dùng để poll requirements list cho khớp.
+  const anyGenerating = useMemo(
+    () => documents.some((d) => d.requirement_status === "generating"),
+    [documents]
+  );
+
+  // Load requirements cho TOÀN BỘ document trong project bằng 1 request duy nhất
+  // (thay vì gọi /documents/{id}/requirements riêng cho từng document — N+1 request
+  // là nguyên nhân khiến trang bị chậm khi có nhiều document).
+  const fetchBulkRequirements = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const r = await apiFetch(`${API_V1_PROJECTS_URL}/${projectId}/requirements`);
+      if (!r.ok) return;
+      const d: { documents: Record<string, GenerateRequirementsResponse> } = await r.json();
+      setExistingRequirements(d.documents);
+    } catch { /* giữ nguyên state cũ nếu lỗi mạng */ }
+  }, [projectId]);
+
   useEffect(() => {
-    documents.forEach(async (doc) => {
-      if (doc.status === "completed" && existingRequirements[doc.id] === undefined && !isLoadingRequirements[doc.id]) {
-        setIsLoadingRequirements((prev) => ({ ...prev, [doc.id]: true }));
-        try {
-          const r = await apiFetch(`${API_V1_DOCUMENTS_URL}/${doc.id}/requirements`);
-          if (r.ok) {
-            const d = await r.json();
-            setExistingRequirements((prev) => ({ ...prev, [doc.id]: d.total_requirements > 0 ? d : null }));
-          } else {
-            setExistingRequirements((prev) => ({ ...prev, [doc.id]: null }));
-          }
-        } catch {
-          setExistingRequirements((prev) => ({ ...prev, [doc.id]: null }));
-        } finally {
-          setIsLoadingRequirements((prev) => ({ ...prev, [doc.id]: false }));
-        }
-      }
-    });
-  }, [documents, existingRequirements, isLoadingRequirements]);
+    if (!projectId) return;
+    let cancelled = false;
+    setIsLoadingRequirements(true);
+    fetchBulkRequirements().finally(() => { if (!cancelled) setIsLoadingRequirements(false); });
+    return () => { cancelled = true; };
+  }, [projectId, fetchBulkRequirements]);
+
+  // Khi còn document đang sinh requirement: poll lại requirements list để cái vừa xong hiện
+  // "View Req" ngay (documents tự poll qua useProjectDocuments; đây là poll bù cho requirements).
+  // Đồng thời fetch thêm 1 lần khi vừa hết generating, tránh khoảng nhấp nháy "Generate".
+  useEffect(() => {
+    if (!anyGenerating) {
+      // Vừa hết generating (hoặc mount): đồng bộ requirements + credit (credit bị trừ ở background).
+      fetchBulkRequirements();
+      refreshUser();
+      return;
+    }
+    const t = setInterval(fetchBulkRequirements, 3000);
+    return () => clearInterval(t);
+    // refreshUser cố tình không đưa vào deps để tránh vòng lặp effect (identity có thể đổi).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyGenerating, fetchBulkRequirements]);
 
   // Add newly uploaded docs to cache
   useEffect(() => {
@@ -127,47 +147,25 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
     });
   };
 
+  // Fire-and-forget: gửi yêu cầu sinh requirement rồi trả về ngay (backend chạy nền, 202).
+  // KHÔNG chờ LLM — người dùng rảnh tay làm việc khác. Trạng thái "generating" được server
+  // ghi vào DB và hiện qua documents poll; xong thì badge tự chuyển sang "View Req".
   const generateRequirements = async (doc: DocumentItem) => {
-    setGeneratingRequirementsId(doc.id); setMessage("");
+    setSubmittingId(doc.id); setMessage("");
     try {
       const r = await apiFetch(`${API_V1_DOCUMENTS_URL}/${doc.id}/requirements/generate`, { method: "POST" });
-      const d = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(d?.detail || "Could not generate requirements.");
-      setExistingRequirements((prev) => ({ ...prev, [doc.id]: d }));
-      refreshUser();  // credit vừa bị trừ → cập nhật lại số hiển thị ở sidebar
-      onViewRequirements(d, doc);
-    } catch (e) { setMessage(e instanceof Error ? e.message : "Cannot connect to backend."); }
-    finally { setGeneratingRequirementsId(null); }
-  };
-
-  // Sinh test case cho TẤT CẢ requirement của document — gọi tuần tự endpoint sinh test case
-  // theo từng requirement (backend chưa có endpoint gộp theo document). Hiện tiến độ n/tổng để
-  // người dùng biết đang chạy tới đâu (mỗi requirement là 1 lời gọi LLM, có thể chậm).
-  const generateTestCases = async (doc: DocumentItem) => {
-    const reqs = existingRequirements[doc.id];
-    if (!reqs || reqs.requirements.length === 0) return;
-    setGeneratingTestCasesId(doc.id); setMessage(""); setSuccessMessage("");
-    setTcProgress({ done: 0, total: reqs.requirements.length });
-    try {
-      let done = 0;
-      for (const req of reqs.requirements) {
-        const r = await apiFetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases/generate`, { method: "POST" });
-        if (!r.ok) {
-          const d = await r.json().catch(() => null);
-          throw new Error(d?.detail || `Không sinh được test case cho requirement "${req.title}".`);
-        }
-        done += 1;
-        setTcProgress({ done, total: reqs.requirements.length });
+      if (!r.ok) {
+        const d = await r.json().catch(() => null);
+        throw new Error(d?.detail || "Không gửi được yêu cầu sinh requirement.");
       }
-      setSuccessMessage(`Đã sinh test case cho ${done} requirement. Mở Tester Studio để xem chi tiết.`);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Cannot connect to backend.");
-    } finally {
-      // credit đã bị trừ theo từng requirement thành công → cập nhật lại sidebar dù có lỗi giữa chừng.
-      refreshUser();
-      setGeneratingTestCasesId(null);
-      setTcProgress(null);
-    }
+      // Cập nhật lạc quan trạng thái generating vào cache documents để badge đổi ngay,
+      // đồng thời invalidate để bắt đầu poll từ server.
+      queryClient.setQueryData<DocumentItem[]>(documentKeys.byProject(projectId), (prev) =>
+        prev?.map((d) => (d.id === doc.id ? { ...d, requirement_status: "generating", requirement_error: null } : d))
+      );
+      queryClient.invalidateQueries({ queryKey: documentKeys.byProject(projectId) });
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Cannot connect to backend."); }
+    finally { setSubmittingId(null); }
   };
 
   const confirmDeleteDocument = () => {
@@ -241,13 +239,6 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
         </div>
       )}
 
-      {/* Success (vd sinh test case xong) */}
-      {successMessage && (
-        <div className="msg" style={{ margin: "0 14px", display: "flex", alignItems: "center", gap: "6px", background: "color-mix(in srgb, var(--success) 12%, transparent)", color: "var(--success)", border: "1px solid color-mix(in srgb, var(--success) 30%, transparent)" }}>
-          {successMessage}
-        </div>
-      )}
-
       {/* Loading */}
       {isLoading && (
         <div style={{ padding: "14px", display: "grid", gap: "6px" }}>
@@ -269,8 +260,10 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
         <div className="doc-card-list">
           {filteredDocuments.map((doc) => {
             const hasReqs = !!existingRequirements[doc.id];
-            const isGenerating = generatingRequirementsId === doc.id;
-            const isLoadingReqs = !!isLoadingRequirements[doc.id];
+            const isSubmitting = submittingId === doc.id;              // đang gửi POST (chưa có xác nhận server)
+            const isGenerating = doc.requirement_status === "generating";  // server đang chạy job nền
+            const isFailed = doc.requirement_status === "failed";
+            const isLoadingReqs = isLoadingRequirements;
             
             const getFileIcon = (filename: string) => {
               const ext = filename.split('.').pop()?.toLowerCase();
@@ -308,7 +301,21 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
                 </div>
                 
                 <div className="doc-card-actions">
-                  {doc.status === "completed" && hasReqs ? (
+                  {doc.status === "completed" && isGenerating ? (
+                    <>
+                      <span className="badge badge-processing" title="AI đang sinh requirement ở nền — bạn có thể làm việc khác, kết quả sẽ tự hiện.">
+                        <SpinnerIcon /> Đang tạo requirement...
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={() => setDocumentToDelete(doc)}
+                        title="Delete"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </>
+                  ) : doc.status === "completed" && hasReqs ? (
                     <>
                       <button
                         type="button"
@@ -316,26 +323,6 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
                         onClick={() => onViewRequirements(existingRequirements[doc.id]!, doc)}
                       >
                         <EyeIcon /> View Req
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={generatingTestCasesId === doc.id}
-                        onClick={() => generateTestCases(doc)}
-                        title="Sinh test case cho tất cả requirement của tài liệu này"
-                      >
-                        {generatingTestCasesId === doc.id
-                          ? <><SpinnerIcon /> TCs {tcProgress ? `${tcProgress.done}/${tcProgress.total}` : "..."}</>
-                          : <><ZapIcon /> Generate TCs</>}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={isGenerating}
-                        onClick={() => generateRequirements(doc)}
-                        title="Re-generate requirements"
-                      >
-                        {isGenerating ? <SpinnerIcon /> : <RefreshIcon />}
                       </button>
                       <button
                         type="button"
@@ -348,13 +335,18 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
                     </>
                   ) : doc.status === "completed" ? (
                     <>
+                      {isFailed && (
+                        <span className="badge badge-error" title={doc.requirement_error || "Sinh requirement thất bại"}>
+                          <AlertIcon /> Tạo thất bại
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="btn btn-primary"
-                        disabled={isGenerating || isLoadingReqs}
+                        disabled={isSubmitting || isLoadingReqs}
                         onClick={() => generateRequirements(doc)}
                       >
-                        {isGenerating ? <><SpinnerIcon /> Gen...</> : isLoadingReqs ? <><SpinnerIcon /> Ldg...</> : <><ZapIcon /> Generate</>}
+                        {isSubmitting ? <><SpinnerIcon /> Gửi...</> : isLoadingReqs ? <><SpinnerIcon /> Ldg...</> : isFailed ? <><RefreshIcon /> Thử lại</> : <><ZapIcon /> Generate</>}
                       </button>
                       <button
                         type="button"

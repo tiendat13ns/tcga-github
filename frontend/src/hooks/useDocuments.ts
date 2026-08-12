@@ -44,6 +44,13 @@ export function useProjectDocuments(projectId: string | null) {
   return useQuery({
     queryKey: documentKeys.byProject(projectId),
     queryFn: () => fetchDocuments(projectId),
+    // Tự poll khi có document đang sinh requirement ở nền — để badge "Đang tạo..." tự chuyển
+    // sang "View Req"/"failed" mà người dùng không phải refresh. Ngừng poll khi không còn cái nào.
+    refetchInterval: (query) => {
+      const docs = query.state.data as { requirement_status?: string | null }[] | undefined;
+      const anyGenerating = Array.isArray(docs) && docs.some((d) => d.requirement_status === "generating");
+      return anyGenerating ? 3000 : false;
+    },
   });
 }
 
