@@ -1,12 +1,14 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy import or_, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 import io
 
 from app.core.auth import get_current_user, get_db
-from app.models import Document, Project, Requirement, User
+from app.core.ownership import verify_requirement_owner
+from app.models import Requirement, User
 from app.schemas.requirement_schema import GenerationStartedResponse
 from app.schemas.test_case_schema import ListTestCasesResponse
 from app.services.credit_service import CREDIT_COST
@@ -15,33 +17,9 @@ from app.services.generation.test_case_generation_service import (
     TestCaseGenerationError,
     list_test_cases_by_requirement,
     run_test_case_generation_job,
-    set_requirement_test_case_status,
 )
 
 router = APIRouter(prefix="/api/v1/requirements", tags=["test-cases"])
-
-
-def _verify_requirement_owner(db: Session, requirement_id: str, user: User) -> Requirement:
-    """Đảm bảo requirement thuộc project của chính user đang đăng nhập (chặn thao tác chéo tài khoản).
-    Trả về Requirement để caller dùng lại."""
-    try:
-        req_uuid = UUID(requirement_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Requirement not found.")
-    req = db.get(Requirement, req_uuid)
-    if req is None:
-        raise HTTPException(status_code=404, detail="Requirement not found.")
-    # Xác định project qua requirement.project_id (có thể null do ondelete SET NULL) → fallback qua document.
-    project_id = req.project_id
-    if project_id is None and req.document_id is not None:
-        doc = db.get(Document, req.document_id)
-        project_id = doc.project_id if doc else None
-    if project_id is None:
-        raise HTTPException(status_code=403, detail="Không xác định được chủ sở hữu requirement.")
-    project = db.get(Project, project_id)
-    if project is None or project.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Bạn không có quyền trên requirement này.")
-    return req
 
 
 @router.post(
@@ -56,7 +34,7 @@ async def generate_test_cases(
 ):
     """Nhận yêu cầu sinh test case rồi chạy NỀN — trả 202 ngay. Frontend poll trạng thái qua
     requirement (test_case_status). Credit chỉ trừ khi job thành công (trong background)."""
-    req = _verify_requirement_owner(db, requirement_id, current_user)
+    req = verify_requirement_owner(db, requirement_id, current_user)
     # Chặn sớm nếu không đủ credit — tránh chạy job rồi mới báo thiếu.
     cost = CREDIT_COST.get("TEST_CASE_GENERATION", 0)
     if current_user.credit_balance < cost:
@@ -64,10 +42,19 @@ async def generate_test_cases(
             status_code=402,
             detail=f"Không đủ Credit. Cần {cost} Credits nhưng chỉ còn {current_user.credit_balance}.",
         )
-    if req.test_case_status == "generating":
+    # UPDATE có điều kiện (thay vì check-rồi-set riêng lẻ) để tránh race: hai request đến gần
+    # như đồng thời chỉ có 1 cái khớp WHERE và thắng, cái còn lại rowcount=0 -> 409. Nhờ vậy
+    # không thể có 2 job nền chạy song song cho cùng 1 requirement (double LLM call, double credit).
+    result = db.execute(
+        update(Requirement)
+        .where(Requirement.id == req.id)
+        .where(or_(Requirement.test_case_status.is_(None), Requirement.test_case_status != "generating"))
+        .values(test_case_status="generating", test_case_error=None)
+    )
+    db.commit()
+    if result.rowcount == 0:
         raise HTTPException(status_code=409, detail="Requirement này đang được sinh test case.")
 
-    set_requirement_test_case_status(requirement_id, "generating", None)
     job_runner.submit(run_test_case_generation_job(requirement_id, str(current_user.id)))
     return GenerationStartedResponse(status="generating", requirement_id=requirement_id)
 
@@ -81,7 +68,7 @@ def get_test_cases(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _verify_requirement_owner(db, requirement_id, current_user)
+    verify_requirement_owner(db, requirement_id, current_user)
     try:
         return list_test_cases_by_requirement(requirement_id)
     except TestCaseGenerationError as exc:
@@ -104,7 +91,7 @@ def export_test_cases(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _verify_requirement_owner(db, requirement_id, current_user)
+    verify_requirement_owner(db, requirement_id, current_user)
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill

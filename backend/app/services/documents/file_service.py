@@ -122,10 +122,17 @@ def _save_documents_to_database(
 
         db.commit()
 
-        for document_model in saved_documents:
-            db.refresh(document_model)
-
-        return [_document_model_to_schema(document_model) for document_model in saved_documents]
+        # Refresh cả loạt bằng 1 query .in_() thay vì db.refresh() riêng từng document (N+1) —
+        # commit() làm expire mọi instance nên phải load lại trước khi đọc attribute.
+        document_ids = [document_model.id for document_model in saved_documents]
+        refreshed_by_id = {
+            document_model.id: document_model
+            for document_model in db.query(Document).filter(Document.id.in_(document_ids)).all()
+        }
+        return [
+            _document_model_to_schema(refreshed_by_id[document_model.id])
+            for document_model in saved_documents
+        ]
 
 
 def _get_documents_from_database(document_ids: list[str]) -> list[DocumentMetadata]:
@@ -339,7 +346,6 @@ def delete_documents_by_ids(document_ids: list[str]) -> int:
         raise ValueError("At least one document id is required")
 
     if is_database_configured():
-        deleted_count = 0
         document_uuids: list[UUID] = []
 
         for document_id in ids_to_delete:
@@ -351,17 +357,23 @@ def delete_documents_by_ids(document_ids: list[str]) -> int:
         with SessionLocal() as db:
             documents = db.query(Document).filter(Document.id.in_(document_uuids)).all()
 
+            # Xoá file vật lý phải lặp per-document (I/O trên từng path riêng), nhưng DELETE
+            # trong DB gộp thành 1 query .in_() cho cả loạt thay vì lặp 3 query/document (N+1)
+            # — giống cách clear_project_documents() đã làm.
             for document in documents:
                 _delete_uploaded_file(document.file_path)
+
+            doc_ids = [document.id for document in documents]
+            if doc_ids:
                 # Delete in FK order: test_cases → requirements → documents
                 db.query(TestCase).filter(TestCase.requirement_id.in_(
-                    db.query(Requirement.id).filter(Requirement.document_id == document.id)
+                    db.query(Requirement.id).filter(Requirement.document_id.in_(doc_ids))
                 )).delete(synchronize_session=False)
-                db.query(Requirement).filter(Requirement.document_id == document.id).delete()
-                db.delete(document)
-                deleted_count += 1
+                db.query(Requirement).filter(Requirement.document_id.in_(doc_ids)).delete(synchronize_session=False)
+                db.query(Document).filter(Document.id.in_(doc_ids)).delete(synchronize_session=False)
+                db.commit()
 
-            db.commit()
+            deleted_count = len(documents)
 
         return deleted_count
 

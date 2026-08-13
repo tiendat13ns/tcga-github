@@ -54,3 +54,16 @@ class GenerationStartedResponse(BaseModel):
     status: str = "generating"
     document_id: str | None = None
     requirement_id: str | None = None
+
+
+class RequirementStatusItem(BaseModel):
+    """Chỉ những field mà frontend cần khi POLL trạng thái sinh test case mỗi vài giây —
+    KHÔNG kèm các cột nội dung nặng (functional_requirement, workflow, business_rules...)."""
+    id: str
+    test_case_status: str | None = None
+    test_case_error: str | None = None
+
+
+class RequirementStatusListResponse(BaseModel):
+    document_id: str
+    requirements: list[RequirementStatusItem]

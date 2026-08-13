@@ -39,12 +39,17 @@ async function updateTestCaseAPI(payload: { id: string; data: Partial<StudioTest
 
 /* ── Hooks ──────────────────────────────────────────────── */
 
-export function useTestCases(filters: Record<string, any>, enabled: boolean = true) {
+export function useTestCases(
+  filters: Record<string, any>,
+  enabled: boolean = true,
+  options?: { refetchOnMount?: boolean | "always" }
+) {
   return useQuery({
     queryKey: testCaseKeys.list(filters),
     queryFn: () => fetchTestCases(filters),
     enabled,
     staleTime: 5 * 60 * 1000, // Cache for 5 mins
+    ...options,
   });
 }
 

@@ -3,6 +3,7 @@ import LandingHeader from "./LandingHeader";
 import LandingHero from "./LandingHero";
 import LandingPainPoints from "./LandingPainPoints";
 import LandingProduct from "./LandingProduct";
+import LandingRagPipeline from "./LandingRagPipeline";
 import LandingHowItWorks from "./LandingHowItWorks";
 import LandingFeatures from "./LandingFeatures";
 import LandingWhoItsFor from "./LandingWhoItsFor";
@@ -34,6 +35,7 @@ export default function LandingPage({ isAuthenticated, onGoToLogin, onGoToRegist
         <LandingHero isAuthenticated={isAuthenticated} onPrimaryCta={primaryCta} />
         <LandingPainPoints />
         <LandingProduct />
+        <LandingRagPipeline />
         <LandingHowItWorks />
         <LandingFeatures />
         <LandingWhoItsFor />

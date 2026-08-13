@@ -5,17 +5,20 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user, get_db
-from app.models import Document, Project, Requirement, User
+from app.core.ownership import verify_requirement_owner
+from app.models import Document, Project, User
 from app.schemas.requirement_schema import (
     BulkRequirementsResponse,
     GenerationStartedResponse,
     ListRequirementsResponse,
     RequirementResponse,
+    RequirementStatusListResponse,
 )
 from app.services.credit_service import CREDIT_COST
 from app.services.generation import job_runner
 from app.services.generation.requirement_generation_service import (
     RequirementGenerationError,
+    list_requirement_statuses_by_document,
     list_requirements_by_document,
     list_requirements_by_project,
     run_requirement_generation_job,
@@ -92,6 +95,24 @@ def get_document_requirements(
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
+@router.get(
+    "/documents/{document_id}/requirements/status",
+    response_model=RequirementStatusListResponse,
+)
+def get_document_requirement_statuses(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Endpoint POLL nhẹ: chỉ trả (id, test_case_status, test_case_error) của từng requirement,
+    để frontend hỏi trạng thái sinh test case mỗi vài giây mà không kéo lại toàn bộ nội dung."""
+    _verify_document_owner(db, document_id, current_user)
+    try:
+        return list_requirement_statuses_by_document(document_id)
+    except RequirementGenerationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
 def _verify_project_owner(db: Session, project_id: str, user: User) -> None:
     try:
         project_uuid = UUID(project_id)
@@ -117,27 +138,6 @@ def get_project_requirements(
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
-def _verify_requirement_owner(db: Session, requirement_id: str, user: User) -> Requirement:
-    """Đảm bảo requirement thuộc project của chính user đang đăng nhập (chặn thao tác chéo tài khoản)."""
-    try:
-        req_uuid = UUID(requirement_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail="Requirement not found") from exc
-    req = db.get(Requirement, req_uuid)
-    if req is None:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-    project_id = req.project_id
-    if project_id is None and req.document_id is not None:
-        doc = db.get(Document, req.document_id)
-        project_id = doc.project_id if doc else None
-    if project_id is None:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-    project = db.get(Project, project_id)
-    if project is None or project.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-    return req
-
-
 @router.patch("/requirements/{requirement_id}/answers", response_model=RequirementResponse)
 def submit_requirement_answers(
     requirement_id: str,
@@ -146,7 +146,7 @@ def submit_requirement_answers(
     db: Session = Depends(get_db),
 ):
     """User submits answers to the AI's clarifying questions for a requirement."""
-    req = _verify_requirement_owner(db, requirement_id, current_user)
+    req = verify_requirement_owner(db, requirement_id, current_user)
     req.user_answers = body.answers
     db.commit()
     db.refresh(req)

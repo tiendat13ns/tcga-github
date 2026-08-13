@@ -62,6 +62,7 @@ def init_db() -> None:
     _ensure_agent_log_columns()
     _ensure_test_case_columns()
     _ensure_usage_logs_table()
+    _ensure_indexes()
     _ensure_admin_user()
 
 
@@ -195,6 +196,28 @@ def _ensure_agent_log_columns() -> None:
     with engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
+
+
+def _ensure_indexes() -> None:
+    """Tạo index cho các cột FK bị query nhiều (đặc biệt trên đường polling mỗi 3s khi sinh
+    test case) nhưng create_all() KHÔNG tự thêm cho bảng đã tồn tại từ trước. Tên index trùng
+    convention SQLAlchemy (index=True ở model) nên trên DB mới create_all tạo trước, còn DB cũ
+    thì các câu IF NOT EXISTS dưới đây bù vào — idempotent, không xung đột.
+
+    - ix_requirements_document_id: lọc requirement theo document (list_latest_by_document_id,
+      delete_by_document_id) — endpoint /documents/{id}/requirements bị poll liên tục.
+    - ix_test_cases_requirement_id: lọc test case theo requirement (list_by_requirement_id,
+      get_latest_version_by_requirement_id) — chạy mỗi lần generate + mỗi lần poll."""
+    statements = [
+        "CREATE INDEX IF NOT EXISTS ix_requirements_document_id ON requirements(document_id)",
+        "CREATE INDEX IF NOT EXISTS ix_test_cases_requirement_id ON test_cases(requirement_id)",
+    ]
+    with engine.begin() as connection:
+        for statement in statements:
+            try:
+                connection.execute(text(statement))
+            except Exception:
+                pass
 
 
 def _ensure_usage_logs_table() -> None:

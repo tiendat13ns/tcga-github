@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import logging
 
 from app.core.auth import get_current_user, get_db
+from app.core.ownership import verify_requirement_owner
 from app.models import Document, Project, TestCase, Requirement, User
 from app.schemas.test_case_schema import (
     StudioTestCaseItem,
@@ -34,27 +35,6 @@ def _get_owned_project_id(db: Session, project_id: str, user: User) -> UUID:
     return project_uuid
 
 
-def _verify_requirement_owner(db: Session, requirement_id: str, user: User) -> Requirement:
-    """Đảm bảo requirement thuộc project của chính user đang đăng nhập (chặn thao tác chéo tài khoản)."""
-    try:
-        req_uuid = UUID(requirement_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail="Requirement not found") from exc
-    req = db.get(Requirement, req_uuid)
-    if req is None:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-    project_id = req.project_id
-    if project_id is None and req.document_id is not None:
-        doc = db.get(Document, req.document_id)
-        project_id = doc.project_id if doc else None
-    if project_id is None:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-    project = db.get(Project, project_id)
-    if project is None or project.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-    return req
-
-
 def _verify_test_case_owner(db: Session, test_case_id: str, user: User) -> TestCase:
     """Đảm bảo test case thuộc project của chính user đang đăng nhập (qua requirement -> project)."""
     try:
@@ -67,7 +47,7 @@ def _verify_test_case_owner(db: Session, test_case_id: str, user: User) -> TestC
         raise HTTPException(status_code=404, detail="Test case not found")
 
     try:
-        _verify_requirement_owner(db, str(tc.requirement_id), user)
+        verify_requirement_owner(db, str(tc.requirement_id), user)
     except HTTPException:
         raise HTTPException(status_code=404, detail="Test case not found")
     return tc
@@ -257,7 +237,7 @@ def create_studio_test_case(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    req = _verify_requirement_owner(db, payload.requirement_id, current_user)
+    req = verify_requirement_owner(db, payload.requirement_id, current_user)
     req_uuid = req.id
 
     try:
