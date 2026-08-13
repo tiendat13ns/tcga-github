@@ -8,11 +8,16 @@ class RequirementRepository:
         self.db = db
 
     def create_many(self, requirements: list[Requirement]) -> list[Requirement]:
+        # flush() gán PK (id) cho từng object mà CHƯA expire → đọc id ngay tốn 0 query. Sau
+        # commit() mọi attribute bị expire, nên nạp lại TẤT CẢ trong MỘT query IN (populate_existing
+        # cập nhật đúng các instance trong identity map) thay vì refresh từng cái (N+1). Cần nạp
+        # sẵn vì caller còn đọc attribute SAU khi session đóng (tránh DetachedInstanceError).
         self.db.add_all(requirements)
+        self.db.flush()
+        ids = [r.id for r in requirements]
         self.db.commit()
-
-        for requirement in requirements:
-            self.db.refresh(requirement)
+        if ids:
+            self.db.query(Requirement).filter(Requirement.id.in_(ids)).populate_existing().all()
 
         return requirements
 
@@ -65,6 +70,31 @@ class RequirementRepository:
             return []
         return (
             self.db.query(Requirement)
+            .filter(
+                Requirement.document_id == document_id,
+                Requirement.version == latest_version,
+            )
+            .all()
+        )
+
+    def list_status_by_document_id(self, document_id: UUID) -> list:
+        """Chỉ lấy (id, test_case_status, test_case_error) của requirement version mới nhất —
+        dùng cho endpoint POLL trạng thái nhẹ, tránh kéo full row + các cột JSON nặng mỗi vài
+        giây. Lọc theo document_id (đã có index) + version mới nhất, khớp list_latest_by_document_id."""
+        from sqlalchemy import func as sqlfunc
+        latest_version = (
+            self.db.query(sqlfunc.max(Requirement.version))
+            .filter(Requirement.document_id == document_id)
+            .scalar()
+        )
+        if latest_version is None:
+            return []
+        return (
+            self.db.query(
+                Requirement.id,
+                Requirement.test_case_status,
+                Requirement.test_case_error,
+            )
             .filter(
                 Requirement.document_id == document_id,
                 Requirement.version == latest_version,

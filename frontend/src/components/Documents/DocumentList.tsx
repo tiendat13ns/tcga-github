@@ -1,15 +1,16 @@
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { DocumentItem } from "../../App";
 import type { GenerateRequirementsResponse } from "../RequirementViewer";
 import { useProjectDocuments, useDeleteDocument, useClearDocuments, useAddDocumentsToCache, documentKeys } from "../../hooks/useDocuments";
+import { useProjectRequirements, requirementKeys } from "../../hooks/useRequirements";
 import { useAuth } from "../../contexts/AuthContext";
+import { useJobTracker } from "../../contexts/JobTrackerContext";
 import { apiFetch } from "../../lib/api";
 import ConfirmDialog from "../ConfirmDialog";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const API_V1_DOCUMENTS_URL = `${API_BASE}/api/v1/documents`;
-const API_V1_PROJECTS_URL = `${API_BASE}/api/v1/projects`;
 
 type DocumentListProps = {
   projectId: string | null;
@@ -54,14 +55,13 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
   const clearDocsMutation = useClearDocuments(projectId);
   const addToCache = useAddDocumentsToCache(projectId);
   const { refreshUser } = useAuth();  // để cập nhật số credit ở sidebar sau khi generate (bị trừ credit)
+  const { trackRequirementJob } = useJobTracker();  // báo toast toàn cục khi sinh xong dù đã rời trang
   const queryClient = useQueryClient();
 
   const [message, setMessage] = useState("");
   const [submittingId, setSubmittingId] = useState<string | null>(null);  // đang gửi POST generate (trước khi server xác nhận)
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
-  const [existingRequirements, setExistingRequirements] = useState<Record<string, GenerateRequirementsResponse | null>>({});
-  const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<DocumentItem | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
@@ -71,42 +71,22 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
     [documents]
   );
 
-  // Load requirements cho TOÀN BỘ document trong project bằng 1 request duy nhất
-  // (thay vì gọi /documents/{id}/requirements riêng cho từng document — N+1 request
-  // là nguyên nhân khiến trang bị chậm khi có nhiều document).
-  const fetchBulkRequirements = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      const r = await apiFetch(`${API_V1_PROJECTS_URL}/${projectId}/requirements`);
-      if (!r.ok) return;
-      const d: { documents: Record<string, GenerateRequirementsResponse> } = await r.json();
-      setExistingRequirements(d.documents);
-    } catch { /* giữ nguyên state cũ nếu lỗi mạng */ }
-  }, [projectId]);
+  // Requirement đã tồn tại của TOÀN BỘ document trong project, cache theo projectId qua
+  // react-query (staleTime: Infinity mặc định) — không tự check lại toàn bộ mỗi lần quay
+  // lại trang; chỉ poll khi có document đang generating.
+  const { data: existingRequirements = {}, isLoading: isLoadingRequirements } = useProjectRequirements(projectId, anyGenerating);
 
+  // Vừa hết generating (chuyển true -> false): đồng bộ lại requirements 1 lần (bắt kịp cái vừa
+  // xong, tránh nhấp nháy "Generate") + credit (bị trừ ở background). Không chạy lúc mount.
+  const prevAnyGeneratingRef = useRef(anyGenerating);
   useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
-    setIsLoadingRequirements(true);
-    fetchBulkRequirements().finally(() => { if (!cancelled) setIsLoadingRequirements(false); });
-    return () => { cancelled = true; };
-  }, [projectId, fetchBulkRequirements]);
-
-  // Khi còn document đang sinh requirement: poll lại requirements list để cái vừa xong hiện
-  // "View Req" ngay (documents tự poll qua useProjectDocuments; đây là poll bù cho requirements).
-  // Đồng thời fetch thêm 1 lần khi vừa hết generating, tránh khoảng nhấp nháy "Generate".
-  useEffect(() => {
-    if (!anyGenerating) {
-      // Vừa hết generating (hoặc mount): đồng bộ requirements + credit (credit bị trừ ở background).
-      fetchBulkRequirements();
+    const wasGenerating = prevAnyGeneratingRef.current;
+    prevAnyGeneratingRef.current = anyGenerating;
+    if (wasGenerating && !anyGenerating) {
+      queryClient.invalidateQueries({ queryKey: requirementKeys.byProject(projectId) });
       refreshUser();
-      return;
     }
-    const t = setInterval(fetchBulkRequirements, 3000);
-    return () => clearInterval(t);
-    // refreshUser cố tình không đưa vào deps để tránh vòng lặp effect (identity có thể đổi).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anyGenerating, fetchBulkRequirements]);
+  }, [anyGenerating, projectId, queryClient, refreshUser]);
 
   // Add newly uploaded docs to cache
   useEffect(() => {
@@ -141,7 +121,7 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
     clearDocsMutation.mutate(undefined, {
       onSuccess: () => {
         setFilters(defaultFilters);
-        setExistingRequirements({});
+        queryClient.setQueryData(requirementKeys.byProject(projectId), {});
       },
       onError: (e) => setMessage(e instanceof Error ? e.message : "Cannot connect to backend."),
     });
@@ -164,6 +144,8 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
         prev?.map((d) => (d.id === doc.id ? { ...d, requirement_status: "generating", requirement_error: null } : d))
       );
       queryClient.invalidateQueries({ queryKey: documentKeys.byProject(projectId) });
+      // Đăng ký theo dõi toàn cục để có toast khi xong, kể cả khi người dùng rời trang này.
+      trackRequirementJob({ documentId: doc.id, projectId, label: doc.original_filename });
     } catch (e) { setMessage(e instanceof Error ? e.message : "Cannot connect to backend."); }
     finally { setSubmittingId(null); }
   };
@@ -172,7 +154,8 @@ export default function DocumentList({ projectId, newUploadedDocuments, onViewRe
     if (!documentToDelete) return;
     deleteDocMutation.mutate(documentToDelete.id, {
       onSuccess: () => {
-        setExistingRequirements((prev) => {
+        queryClient.setQueryData<Record<string, GenerateRequirementsResponse>>(requirementKeys.byProject(projectId), (prev) => {
+          if (!prev) return prev;
           const next = { ...prev };
           delete next[documentToDelete.id];
           return next;

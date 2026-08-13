@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDocumentDetail } from "../hooks/useRequirements";
+import { useTestCases, testCaseKeys } from "../hooks/useTestCases";
 import { useAuth } from "../contexts/AuthContext";
+import { useJobTracker } from "../contexts/JobTrackerContext";
 import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -82,16 +85,14 @@ function RequirementFieldList({ items }: { items: string[] | null }) {
 }
 
 export default function RequirementViewer({ requirements, document, onClose, onRequirementsUpdate }: Props) {
-  const [testCasesMap, setTestCasesMap] = useState<Record<string, GenerateTestCasesResponse | null>>({});
-  // Requirement nào đã kiểm tra xong "có test case chưa" — tránh flash HITL Q&A / nút
-  // Generate trong lúc testCasesMap[req.id] vẫn còn undefined (đang chờ fetch).
-  const [checkedTestCaseIds, setCheckedTestCaseIds] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
   // Trạng thái sinh test case chạy nền theo từng requirement: "generating" | "failed" | null.
   // Khởi tạo từ requirement.test_case_status (server) để mở lại drawer vẫn thấy "đang tạo".
   const [tcStatusMap, setTcStatusMap] = useState<Record<string, string | null>>({});
   const [submittingTcId, setSubmittingTcId] = useState<string | null>(null);  // đang gửi POST
   const [expandedTestCasesId, setExpandedTestCasesId] = useState<string | null>(null);
   const { refreshUser } = useAuth();
+  const { trackTestCaseJob } = useJobTracker();  // toast toàn cục khi test case sinh xong dù đã đóng panel
   const [qaAnswersDraft, setQaAnswersDraft] = useState<Record<string, string[]>>({});
   const [submittingAnswersId, setSubmittingAnswersId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -121,7 +122,9 @@ export default function RequirementViewer({ requirements, document, onClose, onR
   );
   const internalDoc = document ?? fetchedDoc ?? null;
 
-  // Khởi tạo trạng thái generating theo test_case_status của từng requirement (server).
+  // Khởi tạo trạng thái generating theo test_case_status của từng requirement (giá trị tức
+  // thời từ prop — có thể đã cũ vì list document cache staleTime:Infinity). Effect bên dưới
+  // sẽ fetch lại từ server để sửa nếu cũ.
   useEffect(() => {
     if (!requirements) return;
     setTcStatusMap((prev) => {
@@ -133,27 +136,67 @@ export default function RequirementViewer({ requirements, document, onClose, onR
     });
   }, [requirements]);
 
-  // Load existing test cases on requirements change (with auth headers)
+  // Trên mount / khi đổi document: fetch trạng thái test case MỚI NHẤT từ server (1 request
+  // bulk /requirements/status — KHÔNG phải N+1) để phản ánh job đã bắt đầu TRONG LÚC panel
+  // này đang đóng. requirements prop lấy từ cache list document (staleTime:Infinity) nên
+  // test_case_status trong đó có thể vẫn là null dù server đã đánh dấu "generating" —
+  // đây là lý do mở lại panel không thấy "Đang tạo". Fetch tươi này seed lại đúng, và nếu
+  // có req đang generating thì poll bên dưới tự khởi động (anyTcGenerating -> true).
+  const docId = requirements?.document_id;
   useEffect(() => {
-    if (!requirements) return;
-    requirements.requirements.forEach(async (req) => {
-      if (testCasesMap[req.id] === undefined) {
-        try {
-          const r = await apiFetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases`);
-          if (r.ok) {
-            const d = await r.json();
-            setTestCasesMap((prev) => ({ ...prev, [req.id]: d.total_test_cases > 0 ? d : null }));
-          } else {
-            setTestCasesMap((prev) => ({ ...prev, [req.id]: null }));
-          }
-        } catch {
-          setTestCasesMap((prev) => ({ ...prev, [req.id]: null }));
-        } finally {
-          setCheckedTestCaseIds((prev) => new Set(prev).add(req.id));
-        }
-      }
-    });
-  }, [requirements]);
+    if (!docId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await apiFetch(`${API_V1_DOCUMENTS_URL}/${docId}/requirements/status`);
+        if (!r.ok || cancelled) return;
+        const data = await r.json();
+        const reqs: { id: string; test_case_status: string | null }[] = data.requirements || [];
+        setTcStatusMap((prev) => {
+          const next = { ...prev };
+          for (const req of reqs) next[req.id] = req.test_case_status ?? null;
+          return next;
+        });
+      } catch { /* giữ giá trị seed từ prop nếu lỗi mạng */ }
+    })();
+    return () => { cancelled = true; };
+  }, [docId]);
+
+  // Test case đã tồn tại (nếu có) của MỌI requirement trong document — 1 request bulk duy
+  // nhất (giống cách documents list gộp requirements của cả project), rồi group theo
+  // requirement_id ở client. KHÔNG gọi /requirements/{id}/test-cases riêng cho từng
+  // requirement (N+1) như trước — số request không còn tỉ lệ với số requirement nữa.
+  const tcFilters = useMemo(
+    () => ({ document_id: requirements?.document_id, project_id: requirements?.project_id ?? undefined }),
+    [requirements?.document_id, requirements?.project_id]
+  );
+  // refetchOnMount: "always" — mỗi lần mở lại panel này PHẢI check lại 1 lần (bulk, KHÔNG
+  // phải N+1) vì test case có thể vừa sinh xong ở nền trong lúc panel đang đóng: đóng panel
+  // unmount component → interval poll bên dưới cũng bị huỷ theo, nên nếu chỉ dựa staleTime
+  // (5 phút) sẽ có khoảng trống hiển thị nhầm "chưa có test case" dù server đã có rồi.
+  const { data: tcListData, isPending: tcListPending } = useTestCases(tcFilters, !!requirements, { refetchOnMount: "always" });
+
+  const testCasesMap = useMemo(() => {
+    const map: Record<string, GenerateTestCasesResponse | null> = {};
+    if (!requirements) return map;
+    const byReq: Record<string, TestCaseItem[]> = {};
+    for (const tc of tcListData?.test_cases ?? []) {
+      (byReq[tc.requirement_id] ??= []).push(tc);
+    }
+    for (const req of requirements.requirements) {
+      const list = byReq[req.id];
+      map[req.id] = list && list.length > 0
+        ? { requirement_id: req.id, document_id: requirements.document_id, total_test_cases: list.length, test_cases: list }
+        : null;
+    }
+    return map;
+  }, [requirements, tcListData]);
+  // Requirement nào đã kiểm tra xong "có test case chưa" — tránh flash HITL Q&A / nút
+  // Generate trong lúc bulk query vẫn đang isPending (đang chờ fetch/refetch).
+  const checkedTestCaseIds = useMemo(() => {
+    if (!requirements || tcListPending) return new Set<string>();
+    return new Set(requirements.requirements.map((r) => r.id));
+  }, [requirements, tcListPending]);
 
   // Load document preview (with auth headers)
   const loadDocumentPreview = async () => {
@@ -186,46 +229,57 @@ export default function RequirementViewer({ requirements, document, onClose, onR
         throw new Error(d?.detail || "Không gửi được yêu cầu sinh test case.");
       }
       setTcStatusMap((prev) => ({ ...prev, [requirementId]: "generating" }));
+      // Đăng ký theo dõi toàn cục để có toast khi xong, kể cả khi người dùng đóng panel này.
+      if (requirements) {
+        const req = requirements.requirements.find((r) => r.id === requirementId);
+        const label = req?.title || req?.feature_name || req?.module_name || "Requirement";
+        trackTestCaseJob({ documentId: requirements.document_id, requirementId, projectId: requirements.project_id, label });
+      }
     } catch (e) { setMessage(e instanceof Error ? e.message : "Cannot connect to backend."); }
     finally { setSubmittingTcId(null); }
   };
 
-  // Poll trạng thái test case khi có requirement đang generating — lấy test_case_status mới +
-  // test case vừa sinh, để badge "Đang tạo" tự chuyển sang bảng preview mà không phải refresh.
+  // Poll trạng thái test case khi có requirement đang generating — lấy test_case_status mới,
+  // để badge "Đang tạo" tự chuyển sang bảng preview mà không phải refresh.
   const anyTcGenerating = Object.values(tcStatusMap).some((s) => s === "generating");
   const docIdForPoll = requirements?.document_id;
   const refreshUserRef = useRef(refreshUser);
   refreshUserRef.current = refreshUser;
+  // So sánh với trạng thái NGAY TRƯỚC đó để chỉ refetch khi có req vừa chuyển hết generating
+  // (không phải mọi req không-generating mỗi tick — đó chính là N+1: lặp fetch test-cases
+  // riêng từng requirement mỗi 3s cho MỌI req đã xong từ trước).
+  const tcStatusMapRef = useRef(tcStatusMap);
+  tcStatusMapRef.current = tcStatusMap;
   useEffect(() => {
     if (!anyTcGenerating || !docIdForPoll) return;
     let cancelled = false;
     const tick = async () => {
       try {
-        const r = await apiFetch(`${API_V1_DOCUMENTS_URL}/${docIdForPoll}/requirements`);
+        // Endpoint POLL nhẹ: chỉ trả (id, test_case_status, test_case_error) thay vì toàn bộ
+        // nội dung mọi requirement mỗi 3s.
+        const r = await apiFetch(`${API_V1_DOCUMENTS_URL}/${docIdForPoll}/requirements/status`);
         if (!r.ok || cancelled) return;
         const data = await r.json();
-        const reqs: RequirementItem[] = data.requirements || [];
+        const reqs: { id: string; test_case_status: string | null }[] = data.requirements || [];
+        let firstFinishedId: string | null = null;
         for (const req of reqs) {
           const newStatus = req.test_case_status ?? null;
+          const wasGenerating = tcStatusMapRef.current[req.id] === "generating";
           setTcStatusMap((prev) => (prev[req.id] === newStatus ? prev : { ...prev, [req.id]: newStatus }));
-          // Vừa xong (không còn generating): nạp test case đã sinh + cập nhật credit.
-          if (newStatus !== "generating") {
-            const tcRes = await apiFetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/test-cases`);
-            if (tcRes.ok && !cancelled) {
-              const d = await tcRes.json();
-              if (d.total_test_cases > 0) {
-                setTestCasesMap((prev) => ({ ...prev, [req.id]: d }));
-                setExpandedTestCasesId((cur) => cur ?? req.id);
-              }
-            }
-            refreshUserRef.current();
-          }
+          if (wasGenerating && newStatus !== "generating" && !firstFinishedId) firstFinishedId = req.id;
+        }
+        if (firstFinishedId) {
+          // Vừa có requirement xong sinh test case: refetch 1 LẦN DUY NHẤT danh sách test case
+          // bulk của cả document (không fetch riêng từng requirement) + cập nhật credit.
+          await queryClient.invalidateQueries({ queryKey: testCaseKeys.list(tcFilters) });
+          setExpandedTestCasesId((cur) => cur ?? firstFinishedId);
+          refreshUserRef.current();
         }
       } catch { /* bỏ qua lỗi mạng, lần poll sau thử lại */ }
     };
     const t = setInterval(tick, 3000);
     return () => { cancelled = true; clearInterval(t); };
-  }, [anyTcGenerating, docIdForPoll]);
+  }, [anyTcGenerating, docIdForPoll, queryClient, tcFilters]);
 
   const submitAnswersAndGenerate = async (req: RequirementItem) => {
     const drafts = qaAnswersDraft[req.id] || [];

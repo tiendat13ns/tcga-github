@@ -14,7 +14,7 @@ Hệ thống AI thông minh hỗ trợ BA / QA tự động hóa việc phân t�
 ### 2. Xác Thực Người Dùng & Quản Lý Tài Khoản (Authentication)
 - **Xác thực JWT siêu tốc**: Đăng nhập / Đăng ký tài khoản an toàn với cơ chế xác thực JWT nội bộ loại bỏ độ trễ.
 - **User Profile Menu**: Hiển thị thông tin tài khoản, avatar và thanh progress bar credit (số dư / quota gói hiện tại) ngay trong Sidebar trái — không còn thanh điều hướng trên cùng riêng biệt.
-- **Credit áp dụng đồng nhất cho mọi role**: Admin không có cơ chế bypass — được xếp vào bậc Pro Plan qua ngưỡng credit_balance như user thường, vẫn bị trừ credit khi dùng tính năng AI.
+- **Credit & Plan tách biệt**: `credit_balance` là số dư chi tiêu cho tác vụ AI; **`plan`** (`free`/`lite`/`pro`) là cột độc lập quyết định quota (số tài liệu/dự án/dung lượng). Tài khoản mới: 200 Credits, plan `free`. Admin: 3.500 Credits, plan `pro` — nhưng **vẫn bị trừ credit** như mọi role, không có bypass.
 - **Tối ưu giao diện Form**: Đồng bộ tone màu Warm Beige, tương thích hoàn hảo với tính năng Autofill của trình duyệt (Chrome/Edge/Safari).
 
 ### 3. Tối Ưu Caching & State Management (React Query)
@@ -41,6 +41,15 @@ Hệ thống AI thông minh hỗ trợ BA / QA tự động hóa việc phân t�
 - **Tone màu chủ đạo Warm Beige**: Thiết kế hiện đại, tinh tế, loại bỏ nút chuyển Dark/Light mode để giữ tính đồng nhất cao cấp.
 - **Hiệu ứng Dissolve Fade-out**: Khung chat hỗ trợ hiệu ứng mờ tan gradient mượt mà ở viền dưới khi cuộn tin nhắn.
 - **Quick Actions**: Các nút thao tác nhanh (Phân tích tổng quan, Tạo Requirement, Tạo Test Case).
+- **Chat History**: Lịch sử hội thoại lưu ở backend theo project (`GET`/`DELETE /api/chat/history`).
+
+### 8. Auto Bug Report & In-app Feedback
+- **Auto Bug Report**: Từ một Test Case + `actual_result`, AI sinh Bug Report có cấu trúc (`POST /api/v1/test-cases/{id}/bug-report`).
+- **Feedback trong app**: Người dùng gửi bug/feature request/góp ý (`POST /api/feedback`) để Admin xử lý.
+
+### 9. Admin Dashboard (chỉ role `admin`)
+- Thống kê tổng hệ thống, quản lý user (điều chỉnh credit, đổi plan), và xử lý danh sách feedback.
+- Non-admin truy cập route `/admin` bị lặng lẽ đưa về `/overview` (không lộ sự tồn tại của trang).
 
 ---
 
@@ -64,24 +73,35 @@ Hệ thống AI thông minh hỗ trợ BA / QA tự động hóa việc phân t�
 
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| `POST` | `/api/auth/login` | Đăng nhập tài khoản, nhận JWT token |
 | `POST` | `/api/auth/register` | Đăng ký tài khoản mới |
-| `GET` | `/api/auth/me` | Lấy thông tin tài khoản hiện tại |
+| `POST` | `/api/auth/login` | Đăng nhập tài khoản, nhận JWT token |
+| `POST` | `/api/auth/refresh` | Đổi refresh_token lấy access_token mới |
+| `GET` | `/api/auth/me` | Lấy thông tin tài khoản hiện tại (kèm `plan`) |
 | `GET` | `/api/v1/projects` | Danh sách projects (kèm thống kê) |
 | `POST`| `/api/v1/projects` | Tạo project mới |
-| `DELETE`|`/api/v1/projects/{id}`| Xóa project và toàn bộ dữ liệu |
+| `PUT` | `/api/v1/projects/{id}` | Cập nhật project |
+| `DELETE`|`/api/v1/projects/{id}`| Xóa project và toàn bộ dữ liệu (cascade) |
 | `POST` | `/api/documents/upload` | Upload file tài liệu vào project |
 | `GET` | `/api/documents?project_id=...` | Danh sách tài liệu của project |
 | `GET` | `/api/v1/documents/{id}` | Xem chi tiết & preview tài liệu |
-| `POST` | `/api/v1/documents/{id}/requirements/generate` | Sinh requirements từ tài liệu |
+| `POST` | `/api/v1/documents/{id}/requirements/generate` | Sinh requirements từ tài liệu (async, 202) |
+| `GET` | `/api/v1/documents/{id}/requirements` | Danh sách requirements của tài liệu |
+| `GET` | `/api/v1/documents/{id}/requirements/status` | POLL nhẹ: trạng thái sinh test case |
+| `PATCH`| `/api/v1/requirements/{id}/answers` | Trả lời clarifying questions |
 | `GET` | `/api/v1/requirements/{id}/test-cases` | Lấy danh sách test cases |
-| `POST` | `/api/v1/requirements/{id}/test-cases/generate` | Sinh test cases từ requirement |
+| `POST` | `/api/v1/requirements/{id}/test-cases/generate` | Sinh test cases (async, 202; guard 409) |
 | `GET` | `/api/v1/test-cases` | Danh sách test cases (lọc linh hoạt) |
+| `POST` | `/api/v1/test-cases` | Tạo test case thủ công |
 | `PUT` | `/api/v1/test-cases/{id}` | Cập nhật nội dung một test case |
 | `GET` | `/api/v1/test-cases/export` | Export danh sách test cases ra Excel |
+| `POST` | `/api/v1/test-cases/{id}/bug-report` | Sinh Bug Report tự động |
 | `POST` | `/api/chat/message` | AI Chat Agent - Phân tích & gọi công cụ |
+| `GET`/`DELETE` | `/api/chat/history` | Lấy / xóa lịch sử hội thoại theo project |
 | `GET` | `/api/usage/summary` | Thông tin tổng quan tài khoản & gói sử dụng |
 | `GET` | `/api/usage/logs` | Lịch sử hoạt động người dùng |
+| `POST` | `/api/feedback` | Gửi feedback (bug / feature request / góp ý) |
+| `GET` | `/api/admin/stats`, `/api/admin/users`, `/api/admin/feedback` | Admin: thống kê, quản lý user & feedback |
+| `PATCH`| `/api/admin/users/{id}/credits`, `/api/admin/users/{id}/plan` | Admin: điều chỉnh credit / đổi plan |
 
 ---
 

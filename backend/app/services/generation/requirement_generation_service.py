@@ -29,6 +29,8 @@ from app.schemas.requirement_schema import (
     GenerateRequirementsResponse,
     ListRequirementsResponse,
     RequirementResponse,
+    RequirementStatusItem,
+    RequirementStatusListResponse,
 )
 from app.services.rag.retrieval_service import retrieve_relevant_chunks_async
 from app.services.agent.workflow_service import extract_requirements_node
@@ -275,6 +277,34 @@ def list_requirements_by_document(document_id: str) -> ListRequirementsResponse:
             document_id=str(document_uuid),
             total_requirements=len(requirements),
             requirements=[_requirement_to_response(req) for req in requirements],
+        )
+
+
+def list_requirement_statuses_by_document(document_id: str) -> RequirementStatusListResponse:
+    """Chỉ trả về trạng thái sinh test case của các requirement (version mới nhất) trong
+    document — dùng cho polling nhẹ mỗi vài giây, không kéo toàn bộ nội dung requirement."""
+    if not is_database_configured():
+        raise RequirementGenerationError("Database is not configured")
+
+    try:
+        document_uuid = UUID(document_id)
+    except ValueError as exc:
+        raise RequirementGenerationNotFoundError("Document not found.") from exc
+
+    with SessionLocal() as db:
+        repository = RequirementRepository(db)
+        rows = repository.list_status_by_document_id(document_uuid)
+
+        return RequirementStatusListResponse(
+            document_id=str(document_uuid),
+            requirements=[
+                RequirementStatusItem(
+                    id=str(row.id),
+                    test_case_status=row.test_case_status,
+                    test_case_error=row.test_case_error,
+                )
+                for row in rows
+            ],
         )
 
 

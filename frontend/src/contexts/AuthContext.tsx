@@ -74,14 +74,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = (newToken: string, refreshToken?: string | null) => {
-    // Xóa sạch cache của tài khoản trước đó — tránh hiện nhầm project/data của user cũ
-    // cho tới khi F5 (React Query không tự biết đổi user vì queryKey không đổi).
+    // cancelQueries TRƯỚC clear(): clear() không hủy request đang bay, nên nếu 1 query của
+    // tài khoản cũ chưa kịp trả lời thì response trễ đó vẫn bị ghi vào cache sau khi clear(),
+    // hiện nhầm data của user cũ cho tài khoản mới cho tới khi có refetch khác ghi đè.
+    queryClient.cancelQueries();
     queryClient.clear();
     setTokens(newToken, refreshToken);
     setToken(newToken);
   };
 
   const logout = () => {
+    queryClient.cancelQueries();
     queryClient.clear();
     clearTokens();
     setToken(null);

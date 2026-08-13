@@ -5,6 +5,7 @@ import { TCGAAppIcon } from "./TCGALogo";
 import { Project } from "./Projects/ProjectManager";
 import { useUsageSummary, getCurrentPlanQuota } from "../hooks/useUsage";
 import FeedbackModal from "./FeedbackModal";
+import NotificationBell from "./Notifications/NotificationBell";
 
 function PieChartIcon() {
   return (
@@ -74,14 +75,6 @@ function HelpCircleIcon() {
 function formatCompact(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return `${n}`;
-}
-
-function FolderIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-    </svg>
-  );
 }
 
 type TooltipPos = { top: number; left: number };
@@ -214,17 +207,6 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
         )}
       </div>
 
-      {isSidebarOpen && activeView === "project_detail" && selectedProject && (
-        <div
-          className="sidebar-project-crumb"
-          title={selectedProject.name}
-          style={{ display: "flex", alignItems: "center", gap: "5px", margin: "10px 16px 4px", padding: "6px 10px", fontSize: "12px", fontWeight: 500, color: "var(--accent)", background: "var(--accent-glow)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "8px", overflow: "hidden" }}
-        >
-          <FolderIcon />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedProject.name}</span>
-        </div>
-      )}
-
       <ul className="project-list" style={{ marginTop: "16px", flex: 1, padding: isSidebarOpen ? "0 12px" : "0 4px", display: "flex", flexDirection: "column", gap: "4px" }}>
         {isAdmin && (
           <SidebarNavItem
@@ -298,51 +280,70 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
       {user && (
         <>
           <div style={{ height: "1px", background: "var(--border)", margin: "0 12px" }} />
-          <div className="sidebar-user-footer" style={{ padding: isSidebarOpen ? "16px" : "16px 0", display: "flex", justifyContent: "center", alignItems: "center", gap: "12px" }}>
+
+          {/* Credit card nổi bật — đẩy credit lên vị trí dễ thấy, chỉ hiện khi sidebar mở */}
+          {isSidebarOpen && (
+            creditPct !== null ? (
+              <button
+                type="button"
+                className="sidebar-credit-card"
+                onClick={() => onNavigate("usage")}
+                title={`${user.credit_balance.toLocaleString()} / ${currentPlanQuota!.toLocaleString()} credits (${Math.round(creditPct)}%) — ${usageSummary?.current_plan}`}
+              >
+                <div className="scc-top">
+                  <span className="scc-label"><Zap size={13} /> Credit</span>
+                  <span className="scc-balance">{user.credit_balance.toLocaleString()}</span>
+                </div>
+                <div className="scc-bar"><div className="scc-bar-fill" style={{ width: `${creditPct}%` }} /></div>
+                <div className="scc-foot">
+                  <span className="scc-foot-text">{formatCompact(user.credit_balance)} / {formatCompact(currentPlanQuota!)}{usageSummary?.current_plan ? ` · ${usageSummary.current_plan}` : ""}</span>
+                  <ChevronRight size={12} style={{ flexShrink: 0 }} />
+                </div>
+              </button>
+            ) : usageLoading ? (
+              <div className="sidebar-credit-card is-skeleton">
+                <div className="scc-top">
+                  <span className="scc-label"><Zap size={13} /> Credit</span>
+                  <span className="scc-balance" style={{ opacity: 0.4 }}>···</span>
+                </div>
+                <div className="scc-bar"><div className="sidebar-credit-bar-skeleton" style={{ height: "100%", width: "40%", borderRadius: "999px" }} /></div>
+              </div>
+            ) : (
+              <button type="button" className="sidebar-credit-card" onClick={() => onNavigate("usage")} title="Xem Usage & Billing">
+                <div className="scc-top">
+                  <span className="scc-label"><Zap size={13} /> Credit</span>
+                  <span className="scc-balance">{user.credit_balance.toLocaleString()}</span>
+                </div>
+                <div className="scc-foot">
+                  <span className="scc-foot-text">credits</span>
+                  <ChevronRight size={12} style={{ flexShrink: 0 }} />
+                </div>
+              </button>
+            )
+          )}
+
+          {/* Hàng user: avatar + tên + chuông thông báo + logout */}
+          <div
+            className="sidebar-user-footer"
+            style={{ padding: isSidebarOpen ? "12px 16px 16px" : "12px 0", display: "flex", flexDirection: isSidebarOpen ? "row" : "column", justifyContent: "center", alignItems: "center", gap: "10px" }}
+          >
             <div className="sidebar-user-avatar" style={{ background: isAdmin ? "var(--accent)" : undefined, color: isAdmin ? "#fff" : undefined }}>
               {user.email.charAt(0).toUpperCase()}
             </div>
-            {isSidebarOpen && (
+            {isSidebarOpen ? (
               <>
                 <div className="sidebar-user-info" style={{ flex: 1, minWidth: 0 }}>
                   <div className="sidebar-user-email" title={user.email} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>
                     {user.email.split("@")[0]}
                   </div>
-                  {creditPct !== null ? (
-                    <button
-                      type="button"
-                      onClick={() => onNavigate("usage")}
-                      title={`${user.credit_balance.toLocaleString()} / ${currentPlanQuota!.toLocaleString()} credits (${Math.round(creditPct)}%) — ${usageSummary?.current_plan}`}
-                      style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px", background: "none", border: "none", padding: 0, width: "100%", cursor: "pointer" }}
-                    >
-                      <div style={{ flex: 1, height: "6px", borderRadius: "999px", background: "var(--border)", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${creditPct}%`, background: "var(--accent)", borderRadius: "999px", transition: "width 0.6s ease" }} />
-                      </div>
-                      <span style={{ fontSize: "10px", fontWeight: 500, color: "var(--text-muted)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                        {formatCompact(user.credit_balance)}/{formatCompact(currentPlanQuota!)}
-                      </span>
-                      <ChevronRight size={11} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-                    </button>
-                  ) : usageLoading ? (
-                    // Skeleton — cùng hình dạng thanh bar thật, tránh nhấp nháy đổi layout
-                    // khi usage summary còn đang fetch (~vài trăm ms sau khi đăng nhập).
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
-                      <div style={{ flex: 1, height: "6px", borderRadius: "999px", background: "var(--border)", overflow: "hidden" }}>
-                        <div className="sidebar-credit-bar-skeleton" style={{ height: "100%", width: "40%", borderRadius: "999px" }} />
-                      </div>
-                      <span style={{ fontSize: "10px", fontWeight: 500, color: "var(--text-muted)", opacity: 0.5, flexShrink: 0 }}>···</span>
-                    </div>
-                  ) : (
-                    <div className="sidebar-credit-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-                      <Zap size={12} />
-                      <span>{user.credit_balance.toLocaleString()} credits</span>
-                    </div>
-                  )}
                 </div>
+                <NotificationBell />
                 <button type="button" className="sidebar-logout-btn icon-btn-ghost" onClick={onLogout} title="Log out" style={{ padding: "6px" }}>
                   <LogOut size={16} />
                 </button>
               </>
+            ) : (
+              <NotificationBell collapsed />
             )}
           </div>
         </>

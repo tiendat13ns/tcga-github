@@ -82,7 +82,12 @@ from app.database import SessionLocal
 from app.models import Requirement, TestCase
 from app.services.agent.workflow_service import get_llm
 from app.services.rag.retrieval_service import retrieve_relevant_chunks_async
-from app.services.ownership_service import is_document_owned, is_requirement_owned
+from app.services.ownership_service import (
+    filter_owned_document_ids,
+    filter_owned_requirement_ids,
+    is_document_owned,
+    is_requirement_owned,
+)
 from app.prompts.chat_prompt import SYSTEM_PROMPT
 
 from app.services.generation.requirement_generation_service import generate_requirements_from_document, list_requirements_by_document
@@ -120,7 +125,7 @@ def get_chat_agent(user_id: str):
         logger.info(f"Running search_documents_tool for query: {query}")
         db = SessionLocal()
         try:
-            owned_ids = [d for d in document_ids if is_document_owned(db, d, user_id)]
+            owned_ids = filter_owned_document_ids(db, document_ids, user_id)
         finally:
             db.close()
 
@@ -197,7 +202,7 @@ def get_chat_agent(user_id: str):
         logger.info(f"Running extract_requirement_tool for docs: {document_ids}")
         db = SessionLocal()
         try:
-            owned_ids = [d for d in document_ids if is_document_owned(db, d, user_id)]
+            owned_ids = filter_owned_document_ids(db, document_ids, user_id)
         finally:
             db.close()
 
@@ -319,7 +324,7 @@ def get_chat_agent(user_id: str):
         logger.info(f"Running generate_test_case_tool for reqs: {requirement_ids}")
         db = SessionLocal()
         try:
-            owned_ids = [r for r in requirement_ids if is_requirement_owned(db, r, user_id)]
+            owned_ids = filter_owned_requirement_ids(db, requirement_ids, user_id)
         finally:
             db.close()
 

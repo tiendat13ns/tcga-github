@@ -8,11 +8,16 @@ class TestCaseRepository:
         self.db = db
 
     def create_many(self, test_cases: list[TestCase]) -> list[TestCase]:
+        # flush() gán PK (id) cho từng object mà CHƯA expire → đọc id ngay tốn 0 query. Sau
+        # commit() mọi attribute bị expire, nên nạp lại TẤT CẢ trong MỘT query IN (populate_existing
+        # cập nhật đúng các instance trong identity map) thay vì refresh từng cái (N+1). Cần nạp
+        # sẵn vì caller còn đọc attribute SAU khi session đóng (tránh DetachedInstanceError).
         self.db.add_all(test_cases)
+        self.db.flush()
+        ids = [tc.id for tc in test_cases]
         self.db.commit()
-
-        for test_case in test_cases:
-            self.db.refresh(test_case)
+        if ids:
+            self.db.query(TestCase).filter(TestCase.id.in_(ids)).populate_existing().all()
 
         return test_cases
 

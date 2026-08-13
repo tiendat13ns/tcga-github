@@ -138,7 +138,7 @@ class Requirement(Base):
         nullable=True,
         index=True,
     )
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False, index=True)
     title = Column(Text, nullable=False)
     description = Column(Text, nullable=False)
     functional_requirement = Column(Text, nullable=True)
@@ -198,7 +198,7 @@ class TestCase(Base):
     __tablename__ = "test_cases"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    requirement_id = Column(UUID(as_uuid=True), ForeignKey("requirements.id"), nullable=False)
+    requirement_id = Column(UUID(as_uuid=True), ForeignKey("requirements.id"), nullable=False, index=True)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
     title = Column(Text, nullable=False)
     scenario = Column(Text, nullable=True)
