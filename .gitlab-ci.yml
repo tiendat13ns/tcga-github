@@ -25,6 +25,7 @@ deploy:
   tags:
     - local
   script:
+    - $env:KUBECONFIG = "C:\Users\Admin\.kube\config"
     - kubectl set image deployment/backend backend=tcga-backend:$env:CI_COMMIT_SHORT_SHA -n tcga
     - kubectl set image deployment/frontend frontend=tcga-frontend:$env:CI_COMMIT_SHORT_SHA -n tcga
   only:
