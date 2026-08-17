@@ -155,7 +155,7 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login", onG
           <TCGAAppIcon size={54} />
           <div style={{ textAlign: "center" }}>
             <span className="auth2-brand-name" style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "0.04em" }}>TCGA</span>
-            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px", fontWeight: 400 }}>Test Case Generation Assistant</div>
+            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px", fontWeight: 400 }}>Test Case Generation Assistant · CI/CD test</div>
           </div>
         </div>
 
