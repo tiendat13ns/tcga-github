@@ -1,5 +1,6 @@
 backend/venv/
 backend/.env
+backend/.env.secret
 backend/**/__pycache__/
 backend/*.log
 backend/uploads/*

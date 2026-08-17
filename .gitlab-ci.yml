@@ -1,0 +1,31 @@
+stages:
+  - build
+  - deploy
+
+build-backend:
+  stage: build
+  tags:
+    - local
+  script:
+    - docker build -t tcga-backend:$env:CI_COMMIT_SHORT_SHA -f backend/Dockerfile.prod backend
+  only:
+    - main
+
+build-frontend:
+  stage: build
+  tags:
+    - local
+  script:
+    - docker build -t tcga-frontend:$env:CI_COMMIT_SHORT_SHA -f frontend/Dockerfile.prod frontend
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  tags:
+    - local
+  script:
+    - kubectl set image deployment/backend backend=tcga-backend:$env:CI_COMMIT_SHORT_SHA -n tcga
+    - kubectl set image deployment/frontend frontend=tcga-frontend:$env:CI_COMMIT_SHORT_SHA -n tcga
+  only:
+    - main

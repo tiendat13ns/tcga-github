@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: tcga
+data:
+  AI_PROVIDER: "openai_compatible"
+  OPENAI_COMPATIBLE_BASE_URL: "https://api.vilao.ai/v1"
+  OPENAI_COMPATIBLE_MODEL: "ram/gemini-3.6-flash-high"
+  OPENAI_COMPATIBLE_EMBEDDING_MODEL: "dg/text-embedding-3-large"
+  OPENAI_COMPATIBLE_TIMEOUT_SECONDS: "180"
+  RAG_MAX_COSINE_DISTANCE: "2.0"
+  SUPABASE_URL: "https://pejzbnoreklvhbepvbov.supabase.co"
+  ADMIN_EMAILS: "dat96133@example.com"
