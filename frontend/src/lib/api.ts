@@ -5,7 +5,7 @@
 const ACCESS_TOKEN_KEY = "tcga_token";
 const REFRESH_TOKEN_KEY = "tcga_refresh_token";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);

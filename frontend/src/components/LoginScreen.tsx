@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, ArrowRight, ArrowLeft } from "lucide-react";
 import { TCGAAppIcon } from "./TCGALogo";
+import { API_BASE } from "../lib/api";
 
 type LoginScreenProps = {
   onLoginSuccess: (token: string, refreshToken?: string | null, email?: string) => void;
@@ -98,7 +99,7 @@ export default function LoginScreen({ onLoginSuccess, initialMode = "login", onG
 
     try {
       const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
-      const res = await fetch(endpoint, {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
