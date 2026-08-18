@@ -6,7 +6,6 @@ const PLANS = [
   {
     name: "Free Plan",
     status: "active" as const,
-    priceVnd: 0,
     creditsPerMonth: 200,
     maxDocuments: 5,
     maxProjects: 3,
@@ -15,7 +14,6 @@ const PLANS = [
   {
     name: "Lite Plan",
     status: "coming_soon" as const,
-    priceVnd: 99000,
     creditsPerMonth: 600,
     maxDocuments: 15,
     maxProjects: 10,
@@ -24,18 +22,12 @@ const PLANS = [
   {
     name: "Pro Plan",
     status: "coming_soon" as const,
-    priceVnd: 199000,
     creditsPerMonth: 1500,
     maxDocuments: null,
     maxProjects: null,
     storageMb: 2048,
   },
 ];
-
-function formatPrice(vnd: number) {
-  if (vnd === 0) return "Miễn phí";
-  return `${new Intl.NumberFormat("vi-VN").format(vnd)} VNĐ / tháng`;
-}
 
 function formatStorage(mb: number) {
   return mb >= 1024 ? `${mb / 1024}GB Storage` : `${mb}MB Storage`;
@@ -70,7 +62,6 @@ export default function LandingUsage({ isAuthenticated, onPrimaryCta }: LandingU
                 {!isComingSoon && <span className="landing-usage-badge landing-usage-badge-active">Đang mở</span>}
 
                 <div className="landing-usage-card-name">{plan.name}</div>
-                <div className="landing-usage-card-price">{formatPrice(plan.priceVnd)}</div>
 
                 <ul className="landing-usage-card-specs">
                   <li>

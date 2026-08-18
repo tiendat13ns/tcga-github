@@ -43,10 +43,6 @@ function formatDate(iso: string | null) {
   return d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 }
 
-function fmtPrice(n: number) {
-  return new Intl.NumberFormat("vi-VN").format(n) + " VNĐ";
-}
-
 /* ── Credit Ring ─────────────────────────────────────────── */
 export function CreditRing({ balance, used }: { balance: number; used: number }) {
   const total = balance + used || 1;
@@ -136,11 +132,8 @@ export function PlanCard({ plan, isCurrent }: { plan: UsagePlan; isCurrent: bool
         </span>
       )}
 
-      <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>
+      <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "14px" }}>
         {plan.name}
-      </div>
-      <div style={{ fontSize: "18px", fontWeight: 800, color: isCurrent ? "var(--accent)" : "var(--text-primary)", marginBottom: "14px" }}>
-        {plan.price_vnd === 0 ? "Miễn phí" : fmtPrice(plan.price_vnd) + " / tháng"}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px", color: "var(--text-secondary)" }}>
