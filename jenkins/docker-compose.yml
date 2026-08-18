@@ -1,0 +1,27 @@
+services:
+  jenkins:
+    build: .
+    image: tcga-jenkins:lts
+    container_name: tcga_jenkins
+    restart: unless-stopped
+    # Chạy bằng root để có quyền truy cập docker.sock của máy thật (đơn giản hoá cho môi trường học).
+    user: root
+    environment:
+      # Ép JVM dùng IPv4 (DNS của updates.jenkins.io hay chỉ trả IPv6 -> Docker Desktop treo kết nối)
+      # và tăng timeout tải plugin để tránh fail giữa chừng với mirror chậm.
+      JAVA_OPTS: >-
+        -Djava.net.preferIPv4Stack=true
+        -Dhudson.model.UpdateCenter.updateCenterUrl=https://updates.jenkins.io/
+    ports:
+      # Giao diện web Jenkins: mở http://localhost:8080
+      - "8080:8080"
+      # Cổng giao tiếp với agent (để mặc định, chưa cần đụng tới)
+      - "50000:50000"
+    volumes:
+      # Lưu toàn bộ cấu hình Jenkins vào volume để không mất khi container dừng/xoá
+      - jenkins_home:/var/jenkins_home
+      # Cho Jenkins dùng chung Docker daemon của máy thật -> "docker build" chạy được
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  jenkins_home:
