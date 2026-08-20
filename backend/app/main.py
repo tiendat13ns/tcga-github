@@ -34,13 +34,33 @@ from app.routers.usage import router as usage_router
 from app.routers.feedback import router as feedback_router
 from app.admin.router import router as admin_router
 
+import os
+
 app = FastAPI(title="AI Test Case Generation Assistant")
 
 logging.basicConfig(level=logging.INFO)
 
+cors_origins_env = os.getenv("CORS_ORIGINS")
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:1302",
+    "https://tcga.bitsness.vn",
+    "http://tcga.bitsness.vn",
+    "https://api.tcga.bitsness.vn",
+    "http://api.tcga.bitsness.vn",
+]
+if cors_origins_env:
+    for origin in cors_origins_env.split(","):
+        origin_clean = origin.strip()
+        if origin_clean and origin_clean not in allowed_origins:
+            allowed_origins.append(origin_clean)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:1302"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
