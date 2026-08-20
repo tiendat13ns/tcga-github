@@ -7,6 +7,7 @@ export default defineConfig({
     port: 1302,
     // Cần thiết khi chạy bên trong Docker để expose ra bên ngoài container
     host: true,
+    allowedHosts: true,
     watch: {
       // Bind mount trên Windows/Docker Desktop không forward inotify events đầy đủ,
       // nên phải bật polling để Vite phát hiện thay đổi file và tự reload.
