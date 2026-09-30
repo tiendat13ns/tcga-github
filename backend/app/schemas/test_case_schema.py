@@ -1,6 +1,33 @@
 from pydantic import BaseModel
 
 
+class TestExecutionItem(BaseModel):
+    """Một ô trong ma trận chạy thử Environment × Lần chạy — CHỈ chứa kết quả Pass/Fail/Blocked
+    của lần chạy đó. actual_result/bug_reference/note nằm ở cấp TestCase (1 giá trị dùng chung
+    cho cả dòng, đúng cấu trúc file mẫu) — xem models.TestExecution và models.TestCase."""
+    id: str
+    test_case_id: str
+    environment: str
+    run_number: int
+    result: str
+    executed_by: str | None = None
+    executed_at: str | None = None
+
+
+class TestExecutionListResponse(BaseModel):
+    test_case_id: str
+    executions: list[TestExecutionItem]
+
+
+class TestExecutionCreatePayload(BaseModel):
+    environment: str
+    run_number: int | None = None  # None → tự gán = lần chạy kế tiếp cho environment đó (bắt đầu từ 1)
+
+
+class TestExecutionUpdatePayload(BaseModel):
+    result: str | None = None
+
+
 class TestCaseResponse(BaseModel):
     id: str
     requirement_id: str
@@ -20,6 +47,7 @@ class TestCaseResponse(BaseModel):
     execution_status: str
     status: str
     note: str | None = None
+    bug_reference: str | None = None
     version: int
 
 
@@ -41,6 +69,7 @@ class StudioTestCaseItem(TestCaseResponse):
     requirement_title: str | None = None
     project_id: str | None = None
     module_name: str | None = None
+    executions: list[TestExecutionItem] = []
 
 
 class StudioTestCaseListResponse(BaseModel):
@@ -64,6 +93,7 @@ class TestCaseUpdatePayload(BaseModel):
     execution_status: str | None = None
     status: str | None = None
     note: str | None = None
+    bug_reference: str | None = None
 
 class TestCaseCreatePayload(BaseModel):
     requirement_id: str
@@ -82,3 +112,4 @@ class TestCaseCreatePayload(BaseModel):
     execution_status: str = "Untested"
     status: str = "draft"
     note: str | None = None
+    bug_reference: str | None = None

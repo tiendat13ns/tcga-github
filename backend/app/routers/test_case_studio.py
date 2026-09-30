@@ -8,12 +8,16 @@ import logging
 
 from app.core.auth import get_current_user, get_db
 from app.core.ownership import verify_requirement_owner
-from app.models import Document, Project, TestCase, Requirement, User
+from app.models import Document, Project, TestCase, TestExecution, Requirement, User
 from app.schemas.test_case_schema import (
     StudioTestCaseItem,
     StudioTestCaseListResponse,
     TestCaseUpdatePayload,
     TestCaseCreatePayload,
+    TestExecutionItem,
+    TestExecutionListResponse,
+    TestExecutionCreatePayload,
+    TestExecutionUpdatePayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,7 +57,19 @@ def _verify_test_case_owner(db: Session, test_case_id: str, user: User) -> TestC
     return tc
 
 
-def _to_studio_item(tc: TestCase, req: Requirement) -> StudioTestCaseItem:
+def _to_execution_item(ex: TestExecution) -> TestExecutionItem:
+    return TestExecutionItem(
+        id=str(ex.id),
+        test_case_id=str(ex.test_case_id),
+        environment=ex.environment,
+        run_number=ex.run_number,
+        result=ex.result,
+        executed_by=str(ex.executed_by) if ex.executed_by else None,
+        executed_at=ex.executed_at.isoformat() if ex.executed_at else None,
+    )
+
+
+def _to_studio_item(tc: TestCase, req: Requirement, executions: list[TestExecution] | None = None) -> StudioTestCaseItem:
     return StudioTestCaseItem(
         id=str(tc.id),
         requirement_id=str(tc.requirement_id),
@@ -73,12 +89,45 @@ def _to_studio_item(tc: TestCase, req: Requirement) -> StudioTestCaseItem:
         execution_status=tc.execution_status,
         status=tc.status,
         note=tc.note,
+        bug_reference=tc.bug_reference,
         version=tc.version,
         feature_name=req.feature_name,
         requirement_title=req.title,
         project_id=str(req.project_id) if req.project_id else None,
         module_name=req.module_name,
+        executions=[_to_execution_item(e) for e in (executions or [])],
     )
+
+
+# Thứ tự ưu tiên khi suy ra execution_status TỔNG của 1 test case từ các ô trong ma trận
+# Environment × Lần chạy: còn ô nào Fail → tổng Fail (dù ô khác đã Pass); hết Fail nhưng còn
+# Blocked → Blocked; hết cả hai nhưng còn ô chưa chạy → Untested; chỉ khi TẤT CẢ đều Pass thì
+# tổng mới là Pass. Test case CHƯA có ô nào trong ma trận thì giữ nguyên execution_status hiện
+# tại (tương thích ngược với các test case tạo trước khi có tính năng ma trận).
+_RESULT_PRIORITY = ["Fail", "Blocked", "Untested", "Pass"]
+
+
+def _recompute_execution_status(db: Session, test_case_id: UUID) -> str | None:
+    results = {
+        r for (r,) in db.query(TestExecution.result).filter(TestExecution.test_case_id == test_case_id).all()
+    }
+    if not results:
+        return None
+    for candidate in _RESULT_PRIORITY:
+        if candidate in results:
+            return candidate
+    return "Untested"
+
+
+def _apply_execution_rollup(db: Session, test_case_id: UUID) -> None:
+    """Tính lại execution_status tổng và ghi đè vào TestCase — gọi sau mỗi lần tạo/sửa/xoá
+    1 ô trong ma trận (xem _recompute_execution_status)."""
+    new_status = _recompute_execution_status(db, test_case_id)
+    if new_status is None:
+        return
+    tc = db.get(TestCase, test_case_id)
+    if tc is not None and tc.execution_status != new_status:
+        tc.execution_status = new_status
 
 @router.get("/export",
     responses={
@@ -188,7 +237,21 @@ def get_studio_test_cases(
 
         query = query.order_by(TestCase.created_at.asc(), TestCase.id.asc())
         results = query.all()
-        items = [_to_studio_item(tc, req) for tc, req in results]
+
+        # Batch load toàn bộ execution của các test case đang trả về, tránh N+1 query.
+        tc_ids = [tc.id for tc, _ in results]
+        executions_by_tc: dict[UUID, list[TestExecution]] = {}
+        if tc_ids:
+            all_executions = (
+                db.query(TestExecution)
+                .filter(TestExecution.test_case_id.in_(tc_ids))
+                .order_by(TestExecution.environment.asc(), TestExecution.run_number.asc())
+                .all()
+            )
+            for ex in all_executions:
+                executions_by_tc.setdefault(ex.test_case_id, []).append(ex)
+
+        items = [_to_studio_item(tc, req, executions_by_tc.get(tc.id)) for tc, req in results]
 
         return StudioTestCaseListResponse(
             total_test_cases=len(items),
@@ -224,7 +287,10 @@ def update_studio_test_case(
         if not req:
             raise HTTPException(status_code=500, detail="Requirement not found for test case")
 
-        return _to_studio_item(tc, req)
+        executions = db.query(TestExecution).filter(TestExecution.test_case_id == tc.id).order_by(
+            TestExecution.environment.asc(), TestExecution.run_number.asc()
+        ).all()
+        return _to_studio_item(tc, req, executions)
     except HTTPException:
         raise
     except SQLAlchemyError as exc:
@@ -259,6 +325,7 @@ def create_studio_test_case(
             execution_status=payload.execution_status,
             status=payload.status,
             note=payload.note,
+            bug_reference=payload.bug_reference,
         )
         db.add(tc)
         db.commit()
@@ -270,6 +337,140 @@ def create_studio_test_case(
     except SQLAlchemyError as exc:
         logger.error(f"DB Error: {exc}")
         raise HTTPException(status_code=500, detail="Database error while creating test case") from exc
+
+
+# ── Ma trận chạy thử Environment × Lần chạy (Tester Studio) ──────────────────────────────
+# Mỗi TestCase có 0..n ô TestExecution, tester tự thêm environment/lần chạy khi cần (không có
+# danh sách cố định). execution_status TỔNG trên TestCase được suy ra tự động từ các ô này
+# (xem _recompute_execution_status) — tester không còn set trạng thái tổng thủ công một khi
+# đã có ít nhất 1 ô trong ma trận.
+
+@router.get("/{test_case_id}/executions", response_model=TestExecutionListResponse)
+def list_test_executions(
+    test_case_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    tc = _verify_test_case_owner(db, test_case_id, current_user)
+    executions = db.query(TestExecution).filter(TestExecution.test_case_id == tc.id).order_by(
+        TestExecution.environment.asc(), TestExecution.run_number.asc()
+    ).all()
+    return TestExecutionListResponse(
+        test_case_id=str(tc.id),
+        executions=[_to_execution_item(e) for e in executions],
+    )
+
+
+@router.post("/{test_case_id}/executions", response_model=TestExecutionItem)
+def create_test_execution(
+    test_case_id: str,
+    payload: TestExecutionCreatePayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    tc = _verify_test_case_owner(db, test_case_id, current_user)
+    environment = payload.environment.strip()
+    if not environment:
+        raise HTTPException(status_code=400, detail="environment is required")
+
+    try:
+        run_number = payload.run_number
+        if run_number is None:
+            # Tự gán = lần chạy kế tiếp cho ĐÚNG environment này (không đụng environment khác).
+            max_run = db.query(TestExecution.run_number).filter(
+                TestExecution.test_case_id == tc.id,
+                TestExecution.environment == environment,
+            ).order_by(TestExecution.run_number.desc()).first()
+            run_number = (max_run[0] + 1) if max_run else 1
+
+        execution = TestExecution(
+            test_case_id=tc.id,
+            environment=environment,
+            run_number=run_number,
+            result="Untested",
+        )
+        db.add(execution)
+        db.flush()  # cần execution.id trước khi rollup đọc lại bảng
+        _apply_execution_rollup(db, tc.id)
+        db.commit()
+        db.refresh(execution)
+
+        return _to_execution_item(execution)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error(f"DB Error: {exc}")
+        raise HTTPException(status_code=500, detail="Database error while creating execution") from exc
+
+
+def _verify_execution_owner(db: Session, execution_id: str, user: User) -> TestExecution:
+    try:
+        ex_uuid = UUID(execution_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid execution_id format") from exc
+
+    execution = db.query(TestExecution).filter(TestExecution.id == ex_uuid).first()
+    if execution is None:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    # Sở hữu suy ra qua test_case -> requirement -> project, tái dùng check đã có.
+    _verify_test_case_owner(db, str(execution.test_case_id), user)
+    return execution
+
+
+@router.put("/executions/{execution_id}", response_model=TestExecutionItem)
+def update_test_execution(
+    execution_id: str,
+    payload: TestExecutionUpdatePayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    execution = _verify_execution_owner(db, execution_id, current_user)
+    try:
+        update_data = payload.model_dump(exclude_unset=True)
+        if update_data:
+            for key, value in update_data.items():
+                setattr(execution, key, value)
+            if "result" in update_data:
+                execution.executed_by = current_user.id
+                execution.executed_at = datetime.now(timezone.utc)
+            execution.updated_at = datetime.now(timezone.utc)
+
+            _apply_execution_rollup(db, execution.test_case_id)
+            db.commit()
+            db.refresh(execution)
+
+        return _to_execution_item(execution)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error(f"DB Error: {exc}")
+        raise HTTPException(status_code=500, detail="Database error while updating execution") from exc
+
+
+@router.delete("/executions/{execution_id}")
+def delete_test_execution(
+    execution_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    execution = _verify_execution_owner(db, execution_id, current_user)
+    try:
+        test_case_id = execution.test_case_id
+        db.delete(execution)
+        db.flush()
+        _apply_execution_rollup(db, test_case_id)
+        db.commit()
+        return {"status": "deleted"}
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error(f"DB Error: {exc}")
+        raise HTTPException(status_code=500, detail="Database error while deleting execution") from exc
+
 
 from pydantic import BaseModel
 class BugReportPayload(BaseModel):

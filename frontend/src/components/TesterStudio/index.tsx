@@ -6,6 +6,7 @@ import { useProjectDocuments } from "../../hooks/useDocuments";
 import { useTestCases, useUpdateTestCase, useCreateTestCase } from "../../hooks/useTestCases";
 import { downloadWithAuth } from "../../lib/api";
 import BugReportDrawer from "./BugReportDrawer";
+import ExecutionMatrixDrawer from "./ExecutionMatrixDrawer";
 import ProjectSelectionView from "./ProjectSelectionView";
 import ProjectWorkspaceView from "./ProjectWorkspaceView";
 import TestCaseFormDrawer from "./TestCaseFormDrawer";
@@ -46,6 +47,9 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
   // Bug Report Drawer
   const [bugReportTc, setBugReportTc] = useState<StudioTestCaseItem | null>(null);
   const [bugReportFields, setBugReportFields] = useState<BugReportFields>(DEFAULT_BUG_REPORT_FIELDS);
+
+  // Execution Matrix Drawer (Environment × Lần chạy) — chỉ cần id/title, dữ liệu ma trận tự fetch riêng.
+  const [matrixTc, setMatrixTc] = useState<{ id: string; title: string } | null>(null);
 
   /* ── Hooks ── */
   const { data: projects = [], isLoading: isLoadingProjects } = useProjects();
@@ -226,6 +230,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
       expected_result: tc.expected_result,
       priority: tc.priority,
       note: tc.note,
+      bug_reference: tc.bug_reference,
     });
   };
 
@@ -251,6 +256,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
           expected_result: editDraft.expected_result,
           priority: editDraft.priority,
           note: editDraft.note,
+          bug_reference: editDraft.bug_reference,
         },
       });
       showToast("Test case updated successfully!");
@@ -300,6 +306,10 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
   const openBugReportDrawer = (tc: StudioTestCaseItem) => {
     setBugReportTc(tc);
     setBugReportFields(parseBugReport(tc.actual_result));
+  };
+
+  const openExecutionMatrix = (tc: StudioTestCaseItem) => {
+    setMatrixTc({ id: tc.id, title: tc.title });
   };
 
   const handleExecutionStatusChange = async (tc: StudioTestCaseItem, newStatus: string) => {
@@ -393,6 +403,7 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
           onEditRow={openEditDrawer}
           onExecutionStatusChange={handleExecutionStatusChange}
           onOpenBugReportDrawer={openBugReportDrawer}
+          onOpenExecutionMatrix={openExecutionMatrix}
           onGoBackToProjects={goBackToProjects}
           onGoBackToDocuments={goBackToDocuments}
         />
@@ -411,6 +422,11 @@ export default function TesterStudio({ onNavigateToProjects }: TesterStudioProps
         onClose={() => setBugReportTc(null)}
         onSave={handleSaveBugReport}
         isSaving={updateTestCase.isPending}
+      />
+
+      <ExecutionMatrixDrawer
+        testCase={matrixTc}
+        onClose={() => setMatrixTc(null)}
       />
 
       <TestCaseFormDrawer

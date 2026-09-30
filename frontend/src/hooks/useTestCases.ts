@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { StudioTestCaseItem } from "../components/TesterStudio";
+import type { TestExecutionItem } from "../components/TesterStudio/shared";
 import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -119,5 +120,95 @@ async function generateBugReportAPI(payload: { id: string; actual_result: string
 export function useGenerateBugReport() {
   return useMutation({
     mutationFn: generateBugReportAPI,
+  });
+}
+
+/* ── Ma trận chạy thử (Environment × Lần chạy) ─────────────────────────────
+   execution_status TỔNG của test case được backend tự tính lại (rollup) mỗi khi 1 ô
+   thay đổi. Danh sách execution của 1 test case có query riêng (không lồng trong
+   testCases.list) vì Execution Matrix Drawer cần luôn thấy dữ liệu mới nhất trong khi
+   đang mở, không phụ thuộc staleTime 5 phút của danh sách test case tổng. ── */
+
+export const testExecutionKeys = {
+  all: ["testExecutions"] as const,
+  byTestCase: (testCaseId: string) => ["testExecutions", testCaseId] as const,
+};
+
+async function fetchTestExecutions(testCaseId: string): Promise<TestExecutionItem[]> {
+  const r = await apiFetch(`${API_BASE}/api/v1/test-cases/${testCaseId}/executions`);
+  if (!r.ok) throw new Error("Failed to load executions");
+  const d = await r.json();
+  return d.executions || [];
+}
+
+export function useTestExecutions(testCaseId: string | null) {
+  return useQuery({
+    queryKey: testExecutionKeys.byTestCase(testCaseId || ""),
+    queryFn: () => fetchTestExecutions(testCaseId as string),
+    enabled: !!testCaseId,
+  });
+}
+
+// Sau mỗi tạo/sửa/xoá 1 ô: làm mới cả danh sách execution (cho drawer đang mở) lẫn danh
+// sách test case tổng (cho badge execution_status rollup ở bảng ngoài).
+function invalidateExecutionRelatedQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: testExecutionKeys.all });
+  queryClient.invalidateQueries({ queryKey: testCaseKeys.all });
+}
+
+async function createExecutionAPI(payload: { testCaseId: string; environment: string }): Promise<TestExecutionItem> {
+  const r = await apiFetch(`${API_BASE}/api/v1/test-cases/${payload.testCaseId}/executions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ environment: payload.environment }),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d?.detail || "Failed to add execution.");
+  return d;
+}
+
+export function useCreateExecution() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createExecutionAPI,
+    onSuccess: () => invalidateExecutionRelatedQueries(queryClient),
+  });
+}
+
+async function updateExecutionAPI(payload: {
+  executionId: string;
+  data: Partial<Pick<TestExecutionItem, "result">>;
+}): Promise<TestExecutionItem> {
+  const r = await apiFetch(`${API_BASE}/api/v1/test-cases/executions/${payload.executionId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload.data),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d?.detail || "Failed to update execution.");
+  return d;
+}
+
+export function useUpdateExecution() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateExecutionAPI,
+    onSuccess: () => invalidateExecutionRelatedQueries(queryClient),
+  });
+}
+
+async function deleteExecutionAPI(executionId: string): Promise<void> {
+  const r = await apiFetch(`${API_BASE}/api/v1/test-cases/executions/${executionId}`, { method: "DELETE" });
+  if (!r.ok) {
+    const d = await r.json().catch(() => null);
+    throw new Error(d?.detail || "Failed to delete execution.");
+  }
+}
+
+export function useDeleteExecution() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteExecutionAPI,
+    onSuccess: () => invalidateExecutionRelatedQueries(queryClient),
   });
 }

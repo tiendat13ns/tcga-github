@@ -1,11 +1,11 @@
 import { useState, useMemo, Fragment } from "react";
-import { Sparkles, ChevronDown, Search, X } from "lucide-react";
+import { Sparkles, ChevronDown, Search, X, Grid3x3 } from "lucide-react";
 import { Project } from "../Projects/ProjectManager";
 import { DocumentItem } from "../../App";
 import {
   ArrowLeftIcon, AlertCircleIcon, ChevronRightIcon, DownloadIcon,
   EditIcon, ExecutionSummaryBar, FlaskIcon, PriorityBadge,
-  computeExecutionSummary,
+  computeExecutionSummary, executionResultColor,
 } from "./shared";
 import type { ExecutionSummary, StudioTestCaseItem } from "./shared";
 
@@ -29,6 +29,7 @@ type TestCaseTableViewProps = {
 
   onExecutionStatusChange: (tc: StudioTestCaseItem, newStatus: string) => void;
   onOpenBugReportDrawer: (tc: StudioTestCaseItem) => void;
+  onOpenExecutionMatrix: (tc: StudioTestCaseItem) => void;
 
   onGoBackToProjects: () => void;
   onGoBackToDocuments: () => void;
@@ -51,6 +52,7 @@ export default function TestCaseTableView({
   onEditRow,
   onExecutionStatusChange,
   onOpenBugReportDrawer,
+  onOpenExecutionMatrix,
   onGoBackToProjects,
   onGoBackToDocuments,
 }: TestCaseTableViewProps) {
@@ -141,36 +143,58 @@ export default function TestCaseTableView({
         {/* Priority */}
         <td><PriorityBadge priority={tc.priority} /></td>
 
-        {/* Execution */}
+        {/* Execution — có ma trận (>=1 lần chạy) thì trạng thái tổng do backend TỰ suy ra từ
+            ma trận (chỉ đọc ở đây, sửa qua nút Ma trận); chưa có ma trận thì vẫn cho set
+            nhanh bằng dropdown như trước. */}
         <td>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <select
-              className="tcs-dropdown"
-              value={tc.execution_status || "Untested"}
-              onChange={(e) => onExecutionStatusChange(tc, e.target.value)}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {tc.executions && tc.executions.length > 0 ? (
+              <span style={{
+                fontWeight: 600, fontSize: "12px", padding: "4px 8px", borderRadius: "6px",
+                border: "1px solid var(--border)", color: executionResultColor(tc.execution_status),
+                whiteSpace: "nowrap",
+              }}>
+                {tc.execution_status || "Untested"}
+              </span>
+            ) : (
+              <select
+                className="tcs-dropdown"
+                value={tc.execution_status || "Untested"}
+                onChange={(e) => onExecutionStatusChange(tc, e.target.value)}
+                style={{
+                  fontWeight: 600,
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border)",
+                  background: "var(--bg)",
+                  cursor: "pointer",
+                  color: executionResultColor(tc.execution_status),
+                }}
+              >
+                <option value="Untested">Untested</option>
+                <option value="Pass">Pass</option>
+                <option value="Fail">Fail</option>
+                <option value="Blocked">Blocked</option>
+              </select>
+            )}
+            <button
+              onClick={() => onOpenExecutionMatrix(tc)}
               style={{
-                fontWeight: 600,
-                padding: "4px 8px",
-                borderRadius: "6px",
-                border: "1px solid var(--border)",
-                background: "var(--bg)",
-                cursor: "pointer",
-                color: tc.execution_status === "Pass" ? "var(--success)" :
-                       tc.execution_status === "Fail" ? "var(--danger)" :
-                       tc.execution_status === "Blocked" ? "var(--warning)" : "var(--text-muted)"
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: "26px", height: "26px", borderRadius: "6px", flexShrink: 0,
+                border: "1px solid var(--border)", background: "var(--bg)",
+                color: "var(--text-secondary)", cursor: "pointer"
               }}
+              title="Ma trận chạy thử (Environment × Lần chạy)"
             >
-              <option value="Untested">Untested</option>
-              <option value="Pass">Pass</option>
-              <option value="Fail">Fail</option>
-              <option value="Blocked">Blocked</option>
-            </select>
+              <Grid3x3 size={13} strokeWidth={1.75} />
+            </button>
             {tc.execution_status === "Fail" && (
               <button
                 onClick={() => onOpenBugReportDrawer(tc)}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  width: "26px", height: "26px", borderRadius: "6px",
+                  width: "26px", height: "26px", borderRadius: "6px", flexShrink: 0,
                   border: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
                   background: "color-mix(in srgb, var(--danger) 10%, transparent)",
                   color: "var(--danger)", cursor: "pointer"
@@ -183,8 +207,14 @@ export default function TestCaseTableView({
           </div>
         </td>
 
-        {/* Note */}
+        {/* Note — kèm badge Mã lỗi (bug_reference) nếu có, dùng chung cho cả dòng test case
+            (không lặp lại theo từng ô ma trận), sửa qua nút Sửa test case. */}
         <td>
+          {tc.bug_reference && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 600, color: "var(--danger)", marginBottom: "3px" }}>
+              {tc.bug_reference}
+            </div>
+          )}
           <span style={{ fontSize: "12px", color: tc.note ? "var(--text-secondary)" : "var(--text-muted)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {tc.note || "—"}
           </span>

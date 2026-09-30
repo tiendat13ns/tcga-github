@@ -215,7 +215,34 @@ class TestCase(Base):
     execution_status = Column(Text, nullable=False, default="Untested")  # Untested|Pass|Fail|Blocked
     status = Column(Text, nullable=False, default="ai_generated")
     note = Column(Text, nullable=True)
+    bug_reference = Column(Text, nullable=True)        # mã lỗi/ticket hiện tại, VD "NETAT-225" — 1 giá trị/test case
     version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class TestExecution(Base):
+    """Một 'ô' trong ma trận chạy thử Environment/Browser × Lần chạy của 1 TestCase trong
+    Tester Studio (xem docs/test_case_writing_rules.md, mục 10). Mỗi (environment, run_number)
+    là 1 bản ghi riêng do tester tự thêm — không có danh sách environment cố định. Ô CHỈ chứa
+    kết quả Pass/Fail/Blocked của lần chạy đó — actual_result/bug_reference/note nằm ở CẤP
+    TestCase (đúng theo cấu trúc file mẫu: mỗi dòng chỉ có 1 cột "Kết quả hiện tại", 1 cột
+    "Mã lỗi", 1 cột "Ghi chú" dùng chung cho mọi môi trường/lần chạy, KHÔNG lặp lại theo ô).
+    TestCase.execution_status (tổng) được SUY RA từ các bản ghi này (ưu tiên Fail > Blocked >
+    Untested > Pass) mỗi khi một bản ghi được tạo/sửa/xoá — xem _recompute_execution_status
+    trong routers/test_case_studio.py."""
+    __tablename__ = "test_executions"
+    __table_args__ = (
+        Index("ix_test_executions_test_case_id", "test_case_id"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    test_case_id = Column(UUID(as_uuid=True), ForeignKey("test_cases.id", ondelete="CASCADE"), nullable=False)
+    environment = Column(Text, nullable=False)                       # tên tự do, VD "Desktop-Chrome"
+    run_number = Column(Integer, nullable=False, default=1)          # "Lần 1/2/3..." — tester tự thêm
+    result = Column(Text, nullable=False, default="Untested")        # Untested|Pass|Fail|Blocked
+    executed_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    executed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)
 

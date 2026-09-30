@@ -95,6 +95,17 @@ export default function TestCaseFormDrawer({ isOpen, title, draft, onDraftChange
         </div>
 
         <div>
+          <div style={fieldLabelStyle}>Mã lỗi (Bug Reference)</div>
+          <input
+            type="text"
+            value={draft.bug_reference || ""}
+            onChange={(e) => onDraftChange((prev) => ({ ...prev, bug_reference: e.target.value }))}
+            style={{ width: "100%", padding: "10px 14px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text)", fontSize: "13px", fontFamily: "inherit" }}
+            placeholder="VD: NETAT-225 (tuỳ chọn)..."
+          />
+        </div>
+
+        <div>
           <div style={fieldLabelStyle}>Note</div>
           <textarea
             value={draft.note || ""}
