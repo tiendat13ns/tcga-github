@@ -21,7 +21,7 @@ class RequirementRepository:
 
         return requirements
 
-    def delete_by_document_id(self, document_id: UUID) -> int:
+    def delete_by_document_id(self, document_id: UUID, *, commit: bool = True) -> int:
         """Xóa toàn bộ requirements (và test cases liên quan) của document.
         Trả về số lượng requirements đã xóa."""
         # Lấy danh sách requirement IDs cần xóa
@@ -37,7 +37,8 @@ class RequirementRepository:
         self.db.query(TestCase).filter(TestCase.requirement_id.in_(req_ids)).delete(synchronize_session=False)
         # Xóa requirements
         deleted = self.db.query(Requirement).filter(Requirement.document_id == document_id).delete(synchronize_session=False)
-        self.db.commit()
+        if commit:
+            self.db.commit()
         return deleted
 
     def get_latest_version_by_document_id(self, document_id: UUID) -> int:

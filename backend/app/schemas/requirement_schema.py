@@ -1,4 +1,27 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class RequirementComponent(BaseModel):
+    name: str
+    data_type: str | None = None
+    direction: Literal["input", "output", "input_output"]
+    initial_value: str | None = None
+    description: str | None = None
+
+
+class RequirementErrorMessage(BaseModel):
+    type: str | None = None
+    situation: str
+    message: str | None = None
+    notes: str | None = None
+
+
+class RequirementInputUpdateRequest(BaseModel):
+    """Backward-compatible payload for Q&A answers and optional BA/QA free-form context."""
+    answers: list[str] | None = None
+    user_context: str | None = Field(default=None, max_length=4000)
 
 
 class RequirementResponse(BaseModel):
@@ -14,6 +37,8 @@ class RequirementResponse(BaseModel):
     module_name: str | None = None
     feature_name: str | None = None
     actor: str | None = None
+    goal: str | None = None
+    trigger: str | None = None
     business_rules: list[str] | None = None
     inputs: list[str] | None = None
     outputs: list[str] | None = None
@@ -21,11 +46,14 @@ class RequirementResponse(BaseModel):
     validation_rules: list[str] | None = None
     exception_flows: list[str] | None = None
     source_reference: str | None = None
+    components: list[RequirementComponent] | None = None
+    error_messages: list[RequirementErrorMessage] | None = None
     status: str
     version: int
     # Human-in-the-Loop Q&A fields
     clarifying_questions: list[str] | None = None
     user_answers: list[str] | None = None
+    user_context: str | None = None
     # Trạng thái sinh test case chạy nền cho requirement này (None/"generating"/"failed").
     test_case_status: str | None = None
     test_case_error: str | None = None

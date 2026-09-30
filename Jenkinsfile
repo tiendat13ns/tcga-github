@@ -36,15 +36,30 @@ pipeline {
                 sh 'docker run --rm tcga-backend:${IMG_TAG} python -m compileall -q app'
             }
         }
+
+        stage('Unit test backend') {
+            steps {
+                // Test coverage section + schema Requirement, không cần DB/LLM.
+                sh 'docker run --rm tcga-backend:${IMG_TAG} python -m unittest test_requirement_coverage test_requirement_schema -v'
+            }
+        }
+
+        stage('Unit test frontend') {
+            steps {
+                // Dừng ở stage "build" của Dockerfile.prod (còn node_modules + source) rồi chạy Vitest trong đó.
+                sh 'docker build --target build -t tcga-frontend-build:${IMG_TAG} -f frontend/Dockerfile.prod frontend'
+                sh 'docker run --rm tcga-frontend-build:${IMG_TAG} npm run test'
+            }
+        }
     }
 
     post {
         success {
-            echo 'CI OK — cả 2 image build được và backend qua smoke test.'
+            echo 'CI OK — cả 2 image build được, backend qua smoke test và unit test 2 phía đều pass.'
         }
         always {
             // Dọn image tạm để không đầy ổ đĩa
-            sh 'docker image rm tcga-backend:${IMG_TAG} tcga-frontend:${IMG_TAG} || true'
+            sh 'docker image rm tcga-backend:${IMG_TAG} tcga-frontend:${IMG_TAG} tcga-frontend-build:${IMG_TAG} || true'
         }
     }
 }

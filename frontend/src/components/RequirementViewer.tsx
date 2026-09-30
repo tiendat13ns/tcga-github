@@ -17,13 +17,17 @@ export type RequirementItem = {
   permission: string[] | null; workflow: string[] | null;
   state: string[] | null; error_handling: string[] | null;
   module_name: string | null; feature_name: string | null;
-  actor: string | null; business_rules: string[] | null;
+  actor: string | null; goal: string | null; trigger: string | null;
+  business_rules: string[] | null;
   inputs: string[] | null; outputs: string[] | null;
   preconditions: string[] | null; validation_rules: string[] | null;
   exception_flows: string[] | null; source_reference: string | null;
+  components: RequirementComponent[] | null;
+  error_messages: RequirementErrorMessage[] | null;
   status: string; version: number;
   clarifying_questions: string[] | null;
   user_answers: string[] | null;
+  user_context: string | null;
   test_case_status?: string | null;
   test_case_error?: string | null;
 };
@@ -32,6 +36,37 @@ export type GenerateRequirementsResponse = {
   document_id: string; project_id: string | null;
   total_requirements: number; requirements: RequirementItem[];
 };
+
+export type RequirementComponent = {
+  name: string;
+  data_type: string | null;
+  direction: "input" | "output" | "input_output";
+  initial_value: string | null;
+  description: string | null;
+};
+
+export type RequirementErrorMessage = {
+  type: string | null;
+  situation: string;
+  message: string | null;
+  notes: string | null;
+};
+
+export type RequirementViewerUiState = {
+  qaAnswersDraft: Record<string, string[]>;
+  userContextDraft: Record<string, string>;
+  expandedRequirementIds: string[];
+  expandedTestCasesId: string | null;
+};
+
+export function createRequirementViewerUiState(): RequirementViewerUiState {
+  return {
+    qaAnswersDraft: {},
+    userContextDraft: {},
+    expandedRequirementIds: [],
+    expandedTestCasesId: null,
+  };
+}
 
 type TestCaseItem = {
   id: string; requirement_id: string; document_id: string | null;
@@ -57,6 +92,8 @@ type Props = {
   document?: { original_filename: string; file_type: string; file_size: number } | null;
   onClose: () => void;
   onRequirementsUpdate: (reqs: GenerateRequirementsResponse) => void;
+  uiState: RequirementViewerUiState;
+  onUiStateChange: (state: RequirementViewerUiState) => void;
 };
 
 /* ── Icons ── */
@@ -84,16 +121,25 @@ function RequirementFieldList({ items }: { items: string[] | null }) {
   );
 }
 
-export default function RequirementViewer({ requirements, document, onClose, onRequirementsUpdate }: Props) {
+export default function RequirementViewer({ requirements, document, onClose, onRequirementsUpdate, uiState, onUiStateChange }: Props) {
   const queryClient = useQueryClient();
+  const uiStateRef = useRef(uiState);
+  uiStateRef.current = uiState;
+  const updateUiState = (
+    updater: (current: RequirementViewerUiState) => RequirementViewerUiState,
+  ) => {
+    const next = updater(uiStateRef.current);
+    uiStateRef.current = next;
+    onUiStateChange(next);
+  };
   // Trạng thái sinh test case chạy nền theo từng requirement: "generating" | "failed" | null.
   // Khởi tạo từ requirement.test_case_status (server) để mở lại drawer vẫn thấy "đang tạo".
   const [tcStatusMap, setTcStatusMap] = useState<Record<string, string | null>>({});
   const [submittingTcId, setSubmittingTcId] = useState<string | null>(null);  // đang gửi POST
-  const [expandedTestCasesId, setExpandedTestCasesId] = useState<string | null>(null);
+  const expandedTestCasesId = uiState.expandedTestCasesId;
   const { refreshUser } = useAuth();
   const { trackTestCaseJob } = useJobTracker();  // toast toàn cục khi test case sinh xong dù đã đóng panel
-  const [qaAnswersDraft, setQaAnswersDraft] = useState<Record<string, string[]>>({});
+  const qaAnswersDraft = uiState.qaAnswersDraft;
   const [submittingAnswersId, setSubmittingAnswersId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [selectedDocumentDetail, setSelectedDocumentDetail] = useState<DocumentDetail | null>(null);
@@ -101,19 +147,30 @@ export default function RequirementViewer({ requirements, document, onClose, onR
   const [expandedPreview, setExpandedPreview] = useState(false);
   // Mỗi requirement card mặc định thu gọn — tài liệu nhiều requirement sẽ không phải cuộn
   // qua hàng loạt nội dung full-text để tìm đúng cái cần xem.
-  const [expandedReqIds, setExpandedReqIds] = useState<Set<string>>(new Set());
+  const expandedReqIds = useMemo(() => new Set(uiState.expandedRequirementIds), [uiState.expandedRequirementIds]);
 
   const toggleReqExpanded = (id: string) => {
-    setExpandedReqIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(expandedReqIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    updateUiState((current) => ({ ...current, expandedRequirementIds: [...next] }));
   };
 
   const expandReq = (id: string) => {
-    setExpandedReqIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+    if (expandedReqIds.has(id)) return;
+    updateUiState((current) => ({
+      ...current,
+      expandedRequirementIds: [...current.expandedRequirementIds, id],
+    }));
+  };
+
+  const updateExpandedTestCasesId = (
+    next: string | null | ((current: string | null) => string | null),
+  ) => {
+    updateUiState((current) => ({
+      ...current,
+      expandedTestCasesId: typeof next === "function" ? next(current.expandedTestCasesId) : next,
+    }));
   };
 
   // Use React Query to fetch document detail when not provided via prop
@@ -272,7 +329,7 @@ export default function RequirementViewer({ requirements, document, onClose, onR
           // Vừa có requirement xong sinh test case: refetch 1 LẦN DUY NHẤT danh sách test case
           // bulk của cả document (không fetch riêng từng requirement) + cập nhật credit.
           await queryClient.invalidateQueries({ queryKey: testCaseKeys.list(tcFilters) });
-          setExpandedTestCasesId((cur) => cur ?? firstFinishedId);
+          updateExpandedTestCasesId((cur) => cur ?? firstFinishedId);
           refreshUserRef.current();
         }
       } catch { /* bỏ qua lỗi mạng, lần poll sau thử lại */ }
@@ -281,30 +338,45 @@ export default function RequirementViewer({ requirements, document, onClose, onR
     return () => { cancelled = true; clearInterval(t); };
   }, [anyTcGenerating, docIdForPoll, queryClient, tcFilters]);
 
-  const submitAnswersAndGenerate = async (req: RequirementItem) => {
-    const drafts = qaAnswersDraft[req.id] || [];
+  const saveRequirementInput = async (req: RequirementItem, generateAfterSave = false) => {
+    const currentUiState = uiStateRef.current;
+    const drafts = currentUiState.qaAnswersDraft[req.id] || req.user_answers || [];
     const numQuestions = req.clarifying_questions?.length || 0;
     const answers = Array.from({ length: numQuestions }, (_, i) => drafts[i] || "");
+    const userContext = currentUiState.userContextDraft[req.id] ?? req.user_context ?? "";
+
+    if (userContext.length > 4000) {
+      setMessage("Góp ý cho AI không được vượt quá 4.000 ký tự.");
+      return;
+    }
 
     setSubmittingAnswersId(req.id); setMessage("");
     try {
       const r = await apiFetch(`${API_V1_REQUIREMENTS_URL}/${req.id}/answers`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers, user_context: userContext || null }),
       });
       const saved = await r.json().catch(() => null);
       if (!r.ok) throw new Error(saved?.detail || "Could not save answers.");
 
       const updatedReqs = {
         ...requirements!,
-        requirements: requirements!.requirements.map((r) =>
-          r.id === req.id ? { ...r, user_answers: saved.user_answers } : r
-        ),
+        requirements: requirements!.requirements.map((r) => r.id === req.id ? { ...r, ...saved } : r),
       };
       onRequirementsUpdate(updatedReqs);
 
-      await generateTestCases(req.id);
+      updateUiState((current) => {
+        const { [req.id]: _savedAnswers, ...remainingAnswerDrafts } = current.qaAnswersDraft;
+        const { [req.id]: _savedContext, ...remainingContextDrafts } = current.userContextDraft;
+        return {
+          ...current,
+          qaAnswersDraft: remainingAnswerDrafts,
+          userContextDraft: remainingContextDrafts,
+        };
+      });
+
+      if (generateAfterSave) await generateTestCases(req.id);
     } catch (e) { setMessage(e instanceof Error ? e.message : "Cannot connect to backend."); }
     finally { setSubmittingAnswersId(null); }
   };
@@ -452,7 +524,7 @@ export default function RequirementViewer({ requirements, document, onClose, onR
                           className="btn btn-secondary"
                           onClick={() => {
                             expandReq(req.id);
-                            setExpandedTestCasesId((prev) => prev === req.id ? null : req.id);
+                            updateExpandedTestCasesId((prev) => prev === req.id ? null : req.id);
                           }}
                         >
                           {expandedTestCasesId === req.id
@@ -485,8 +557,20 @@ export default function RequirementViewer({ requirements, document, onClose, onR
                         <button
                           type="button"
                           className="btn btn-primary"
-                          disabled={isTcSubmitting}
-                          onClick={() => generateTestCases(req.id)}
+                          disabled={
+                            isTcSubmitting
+                            || submittingAnswersId === req.id
+                            || (uiState.userContextDraft[req.id] ?? req.user_context ?? "").length > 4000
+                          }
+                          onClick={() => {
+                            const current = uiStateRef.current;
+                            const hasUnsavedInput = Boolean(
+                              current.qaAnswersDraft[req.id]
+                              || current.userContextDraft[req.id] !== undefined
+                            );
+                            if (hasUnsavedInput) saveRequirementInput(req, true);
+                            else generateTestCases(req.id);
+                          }}
                           title="Sinh test case cho requirement này"
                         >
                           {isTcSubmitting
@@ -502,6 +586,15 @@ export default function RequirementViewer({ requirements, document, onClose, onR
 
               {isExpanded && (
               <div className="req-card-body">
+                <div className="req-section-group">
+                  <div className="req-field-label">Thông tin chung</div>
+                  <div className="req-general-grid">
+                    <div><span>Actor</span><strong>{req.actor || "Chưa xác định"}</strong></div>
+                    <div><span>Mục tiêu</span><strong>{req.goal || "Chưa xác định"}</strong></div>
+                    <div><span>Trigger</span><strong>{req.trigger || "Chưa xác định"}</strong></div>
+                    <div><span>Điều kiện tiên quyết</span><strong>{req.preconditions?.join("; ") || "Chưa xác định"}</strong></div>
+                  </div>
+                </div>
                 {req.functional_requirement && (
                   <div className="req-field">
                     <div className="req-field-label">Functional Requirement</div>
@@ -516,8 +609,14 @@ export default function RequirementViewer({ requirements, document, onClose, onR
                 )}
                 {req.workflow && req.workflow.length > 0 && (
                   <div className="req-field">
-                    <div className="req-field-label">Workflow</div>
+                    <div className="req-field-label">Main Flow</div>
                     <RequirementFieldList items={req.workflow} />
+                  </div>
+                )}
+                {req.exception_flows && req.exception_flows.length > 0 && (
+                  <div className="req-field">
+                    <div className="req-field-label">Alternative / Exception Flow</div>
+                    <RequirementFieldList items={req.exception_flows} />
                   </div>
                 )}
                 {req.error_handling && req.error_handling.length > 0 && (
@@ -526,6 +625,75 @@ export default function RequirementViewer({ requirements, document, onClose, onR
                     <RequirementFieldList items={req.error_handling} />
                   </div>
                 )}
+                {req.components && req.components.length > 0 && (
+                  <div className="req-field">
+                    <div className="req-field-label">Thành phần dữ liệu</div>
+                    <div className="req-structured-table req-components-table" role="table" aria-label="Thành phần dữ liệu">
+                      <div className="req-structured-row req-structured-header" role="row">
+                        <span role="columnheader">Tên</span><span role="columnheader">Kiểu</span><span role="columnheader">Chiều</span><span role="columnheader">Khởi tạo</span><span role="columnheader">Mô tả</span>
+                      </div>
+                      {req.components.map((component, componentIndex) => (
+                        <div className="req-structured-row" role="row" key={`${component.name}-${componentIndex}`}>
+                          <span role="cell" data-label="Tên">{component.name}</span>
+                          <span role="cell" data-label="Kiểu">{component.data_type || "-"}</span>
+                          <span role="cell" data-label="Chiều">{component.direction}</span>
+                          <span role="cell" data-label="Khởi tạo">{component.initial_value || "-"}</span>
+                          <span role="cell" data-label="Mô tả">{component.description || "-"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {req.error_messages && req.error_messages.length > 0 && (
+                  <div className="req-field">
+                    <div className="req-field-label">Thông báo lỗi</div>
+                    <div className="req-structured-table req-errors-table" role="table" aria-label="Thông báo lỗi">
+                      <div className="req-structured-row req-structured-header" role="row">
+                        <span role="columnheader">Loại</span><span role="columnheader">Tình huống</span><span role="columnheader">Thông báo</span><span role="columnheader">Ghi chú</span>
+                      </div>
+                      {req.error_messages.map((errorMessage, errorIndex) => (
+                        <div className="req-structured-row" role="row" key={`${errorMessage.situation}-${errorIndex}`}>
+                          <span role="cell" data-label="Loại">{errorMessage.type || "-"}</span>
+                          <span role="cell" data-label="Tình huống">{errorMessage.situation}</span>
+                          <span role="cell" data-label="Thông báo">{errorMessage.message || "Chưa xác định"}</span>
+                          <span role="cell" data-label="Ghi chú">{errorMessage.notes || "-"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {req.source_reference && (
+                  <div className="req-field">
+                    <div className="req-field-label">Nguồn tham chiếu</div>
+                    <div className="req-field-value">{req.source_reference}</div>
+                  </div>
+                )}
+                <div className="req-user-context-panel">
+                  <label className="req-field-label" htmlFor={`user-context-${req.id}`}>Góp ý cho AI (tùy chọn)</label>
+                  <textarea
+                    id={`user-context-${req.id}`}
+                    className="hitl-qa-answer"
+                    value={uiState.userContextDraft[req.id] ?? req.user_context ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      updateUiState((current) => ({
+                        ...current,
+                        userContextDraft: { ...current.userContextDraft, [req.id]: value },
+                      }));
+                    }}
+                    placeholder="Bổ sung phạm vi, sửa cách AI hiểu nghiệp vụ hoặc nêu quy tắc đã được BA/QA xác nhận..."
+                    rows={3}
+                    aria-describedby={`user-context-count-${req.id}`}
+                    aria-invalid={(uiState.userContextDraft[req.id] ?? req.user_context ?? "").length > 4000}
+                  />
+                  <div
+                    id={`user-context-count-${req.id}`}
+                    className={`req-context-count${(uiState.userContextDraft[req.id] ?? req.user_context ?? "").length > 4000 ? " is-error" : ""}`}
+                    aria-live="polite"
+                  >
+                    {(uiState.userContextDraft[req.id] ?? req.user_context ?? "").length}/4000 ký tự
+                  </div>
+                </div>
                 {/* HITL Q&A Panel */}
                 {needsAnswers && !isTcGenerating && (
                   <div className="hitl-qa-panel">
@@ -549,11 +717,17 @@ export default function RequirementViewer({ requirements, document, onClose, onR
                             value={qaAnswersDraft[req.id]?.[qIdx] ?? (req.user_answers?.[qIdx] || "")}
                             onChange={(e) => {
                               const val = e.target.value;
-                              setQaAnswersDraft((prev) => {
-                                const arr = [...(prev[req.id] || Array(req.clarifying_questions!.length).fill(""))];
-                                arr[qIdx] = val;
-                                return { ...prev, [req.id]: arr };
-                              });
+                              const existing = qaAnswersDraft[req.id]
+                                ?? Array.from(
+                                  { length: req.clarifying_questions!.length },
+                                  (_, index) => req.user_answers?.[index] || "",
+                                );
+                              const answers = [...existing];
+                              answers[qIdx] = val;
+                              updateUiState((current) => ({
+                                ...current,
+                                qaAnswersDraft: { ...current.qaAnswersDraft, [req.id]: answers },
+                              }));
                             }}
                             rows={2}
                           />
@@ -562,6 +736,17 @@ export default function RequirementViewer({ requirements, document, onClose, onR
                     </div>
                   </div>
                 )}
+
+                <div className="req-input-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={submittingAnswersId === req.id || (uiState.userContextDraft[req.id] ?? req.user_context ?? "").length > 4000}
+                    onClick={() => saveRequirementInput(req)}
+                  >
+                    {submittingAnswersId === req.id ? <><SpinnerIcon /> Đang lưu...</> : "Lưu thông tin xác nhận"}
+                  </button>
+                </div>
 
                 {/* Test Cases Preview — chỉ demo vài case đầu, xem đầy đủ ở Tester Studio
                     (nơi có layout bảng rộng phù hợp hơn cho danh sách nhiều test case). */}

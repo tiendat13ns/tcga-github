@@ -7,10 +7,13 @@ __pycache__/
 *.pyo
 
 # File môi trường chứa API key và mật khẩu - QUAN TRỌNG, không được copy!
-.env
+# Dùng .env* để chặn cả .env.secret; chỉ giữ lại file mẫu.
+.env*
+!.env.example
 
 # Log files
 *.log
 
-# Thư mục uploads nếu không muốn mount, bỏ comment dòng dưới
-# uploads/
+# Dữ liệu người dùng tải lên và file output tạm khi debug - không đóng vào image
+uploads/
+out.json

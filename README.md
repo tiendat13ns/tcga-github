@@ -23,7 +23,8 @@ Hệ thống AI thông minh hỗ trợ BA / QA tự động hóa việc phân t�
 
 ### 4. Upload & Trích Xuất Yêu Cầu (AI Requirement Generation)
 - Hỗ trợ đa dạng định dạng file: `pdf`, `docx`, `txt`, `md`, `xlsx`, `csv`, `zip`.
-- Tìm kiếm ngữ cảnh liên quan nhất (RAG Semantic Search) để tạo ra tập **Comprehensive Requirement** đầy đủ, không bị xé lẻ.
+- Phân tích outline theo từng source section, hậu kiểm coverage và chạy bổ sung cho phần còn thiếu để tạo tập **Comprehensive Requirement** đầy đủ, không bị xé lẻ.
+- Requirement hỗ trợ cấu trúc BA/QA gồm Actor, Goal, Trigger, Preconditions, Main/Exception Flow, Components, Error Messages và câu hỏi làm rõ dựa trên bằng chứng nguồn.
 - Tự động đồng bộ ngôn ngữ đầu ra theo ngôn ngữ của tài liệu.
 
 ### 5. Sinh Test Case Tự Động & Xuất Excel (AI Test Case Generation)
@@ -87,7 +88,7 @@ Hệ thống AI thông minh hỗ trợ BA / QA tự động hóa việc phân t�
 | `POST` | `/api/v1/documents/{id}/requirements/generate` | Sinh requirements từ tài liệu (async, 202) |
 | `GET` | `/api/v1/documents/{id}/requirements` | Danh sách requirements của tài liệu |
 | `GET` | `/api/v1/documents/{id}/requirements/status` | POLL nhẹ: trạng thái sinh test case |
-| `PATCH`| `/api/v1/requirements/{id}/answers` | Trả lời clarifying questions |
+| `PATCH`| `/api/v1/requirements/{id}/answers` | Lưu clarifying answers và/hoặc `user_context` của BA/QA |
 | `GET` | `/api/v1/requirements/{id}/test-cases` | Lấy danh sách test cases |
 | `POST` | `/api/v1/requirements/{id}/test-cases/generate` | Sinh test cases (async, 202; guard 409) |
 | `GET` | `/api/v1/test-cases` | Danh sách test cases (lọc linh hoạt) |
@@ -122,3 +123,8 @@ Yêu cầu: Đã cài đặt [Docker Desktop](https://www.docker.com/products/do
 3. **Truy cập:**
    - **Frontend:** `http://localhost:1302`
    - **Backend Swagger Docs:** `http://localhost:1303/docs`
+
+## Tài liệu
+
+- [Software Requirements Specification](./SRS_AI_Test_Case_Generation_Assistant.md)
+- [Backlog xử lý Feedback TCGA](./TASKS_FEEDBACK_TCGA.md)

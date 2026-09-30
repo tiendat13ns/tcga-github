@@ -14,6 +14,7 @@ Theo thiết kế hiện tại, một document luôn được tổng hợp thàn
 """
 
 import logging
+import os
 import time
 from datetime import datetime
 from uuid import UUID
@@ -32,8 +33,13 @@ from app.schemas.requirement_schema import (
     RequirementStatusItem,
     RequirementStatusListResponse,
 )
-from app.services.rag.retrieval_service import retrieve_relevant_chunks_async
 from app.services.agent.workflow_service import extract_requirements_node
+from app.services.generation.requirement_coverage_service import (
+    build_context_batches,
+    deduplicate_requirements,
+    extract_source_sections,
+    find_uncovered_sections,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +67,7 @@ def _coerce_to_list(value) -> list[str] | None:
     return None
 
 
-def _requirement_to_response(requirement: Requirement) -> RequirementResponse:
+def requirement_to_response(requirement: Requirement) -> RequirementResponse:
     return RequirementResponse(
         id=str(requirement.id),
         title=requirement.title,
@@ -75,6 +81,8 @@ def _requirement_to_response(requirement: Requirement) -> RequirementResponse:
         module_name=requirement.module_name,
         feature_name=requirement.feature_name,
         actor=requirement.actor,
+        goal=requirement.goal,
+        trigger=requirement.trigger,
         business_rules=_coerce_to_list(requirement.business_rules),
         inputs=_coerce_to_list(requirement.inputs),
         outputs=_coerce_to_list(requirement.outputs),
@@ -82,10 +90,13 @@ def _requirement_to_response(requirement: Requirement) -> RequirementResponse:
         validation_rules=_coerce_to_list(requirement.validation_rules),
         exception_flows=_coerce_to_list(requirement.exception_flows),
         source_reference=requirement.source_reference,
+        components=requirement.components,
+        error_messages=requirement.error_messages,
         status=requirement.status,
         version=requirement.version,
         clarifying_questions=_coerce_to_list(requirement.clarifying_questions),
         user_answers=_coerce_to_list(requirement.user_answers),
+        user_context=requirement.user_context,
         test_case_status=requirement.test_case_status,
         test_case_error=requirement.test_case_error,
     )
@@ -114,36 +125,23 @@ async def generate_requirements_from_document(document_id: str) -> GenerateRequi
 
         project_id = getattr(document, "project_id", None)
         doc_id_str = str(document.id)
-        fallback_text = document.extracted_text
+        extracted_text = document.extracted_text
+        original_filename = document.original_filename
+        document_type = document.file_type
 
-        # RAG: Lấy các chunks liên quan nhất từ DB thay vì nhồi toàn bộ văn bản.
-        RAG_QUERY = (
-            "software requirements, features, user stories, business rules, "
-            "functional requirements, use cases, actors, workflows, validations, "
-            "permissions, error handling, system behavior"
-        )
-        retrieved_chunks = await retrieve_relevant_chunks_async(
-            db,
-            RAG_QUERY,
-            top_k=12,
-            document_id=doc_id_str,
-            project_id=str(project_id) if project_id else None,
-        )
-
-    # Nếu chưa có chunks trong DB, fallback về extracted_text
-    if retrieved_chunks:
-        retrieved_context = "\n\n---\n\n".join(retrieved_chunks)
-        logger.info(
-            "RAG: using %d retrieved chunks for document %s (skipping full extracted_text)",
-            len(retrieved_chunks),
-            doc_id_str,
-        )
-    else:
-        retrieved_context = fallback_text
-        logger.warning(
-            "RAG: no chunks found for document %s, falling back to full extracted_text",
-            doc_id_str,
-        )
+    context_max_chars = int(os.getenv("REQUIREMENT_CONTEXT_MAX_CHARS", "24000"))
+    source_sections = extract_source_sections(extracted_text)
+    context_batches = build_context_batches(
+        source_sections,
+        max_chars=context_max_chars,
+    )
+    logger.info(
+        "Requirement coverage: document=%s sections=%d batches=%d titles=%s",
+        doc_id_str,
+        len(source_sections),
+        len(context_batches),
+        [section.title for section in source_sections],
+    )
 
     # Sử dụng Workflow Agent với Structured Output
     started_at = time.perf_counter()
@@ -152,15 +150,55 @@ async def generate_requirements_from_document(document_id: str) -> GenerateRequi
     try:
         from app.prompts.requirement_extraction_prompt import build_user_prompt
         
-        user_prompt = build_user_prompt(
-            project_context="",  # Hiện tại chưa truyền project_context cụ thể
-            document_id=doc_id_str,
-            file_name=getattr(document, "file_name", "Unknown File"),
-            document_type=getattr(document, "file_type", "Unknown Type"),
-            retrieved_context=retrieved_context
+        result_items: list = []
+        for batch_index, retrieved_context in enumerate(context_batches, start=1):
+            user_prompt = build_user_prompt(
+                project_context="",
+                document_id=doc_id_str,
+                file_name=original_filename,
+                document_type=document_type,
+                retrieved_context=retrieved_context,
+            )
+            batch_result = await extract_requirements_node(user_prompt, document_id)
+            result_items.extend(batch_result.requirements)
+            logger.info(
+                "Requirement coverage: document=%s batch=%d/%d generated=%d",
+                doc_id_str, batch_index, len(context_batches), len(batch_result.requirements),
+            )
+
+        result_items = deduplicate_requirements(result_items)
+        uncovered_sections = find_uncovered_sections(source_sections, result_items)
+        if uncovered_sections:
+            logger.warning(
+                "Requirement coverage incomplete after first pass: document=%s uncovered=%s",
+                doc_id_str, [section.title for section in uncovered_sections],
+            )
+            for supplementary_context in build_context_batches(
+                uncovered_sections,
+                max_chars=context_max_chars,
+            ):
+                supplementary_prompt = build_user_prompt(
+                    project_context="",
+                    document_id=doc_id_str,
+                    file_name=original_filename,
+                    document_type=document_type,
+                    retrieved_context=supplementary_context,
+                )
+                supplementary_result = await extract_requirements_node(supplementary_prompt, document_id)
+                result_items.extend(supplementary_result.requirements)
+            result_items = deduplicate_requirements(result_items)
+
+        still_uncovered = find_uncovered_sections(source_sections, result_items)
+        logger.log(
+            logging.WARNING if still_uncovered else logging.INFO,
+            "Requirement coverage result: document=%s detected=%d covered=%d uncovered=%s",
+            doc_id_str,
+            len(source_sections),
+            len(source_sections) - len(still_uncovered),
+            [section.title for section in still_uncovered],
         )
-        
-        result = await extract_requirements_node(user_prompt, document_id)
+        if not result_items:
+            raise RequirementGenerationAIError("AI returned no requirements for the document.")
         execution_time_ms = int((time.perf_counter() - started_at) * 1000)
         logger.info("Agent extract_requirements completed in %d ms", execution_time_ms)
     except Exception as exc:
@@ -177,7 +215,8 @@ async def generate_requirements_from_document(document_id: str) -> GenerateRequi
             repository = RequirementRepository(db)
 
             # Xóa requirements cũ + test cases liên quan trước khi tạo mới
-            deleted_count = repository.delete_by_document_id(document.id)
+            # Delete + insert share one transaction so a failed replacement preserves old data.
+            deleted_count = repository.delete_by_document_id(document.id, commit=False)
             if deleted_count > 0:
                 logger.info(
                     "Replaced %d old requirement(s) for document %s before generating new ones.",
@@ -200,17 +239,21 @@ async def generate_requirements_from_document(document_id: str) -> GenerateRequi
                     module_name=item.module,
                     feature_name=item.feature,
                     actor=item.actor,
+                    goal=item.goal,
+                    trigger=item.trigger,
                     business_rules=item.business_rule,
                     inputs=item.input_data,
                     outputs=item.output_data,
                     preconditions=item.preconditions,
                     exception_flows=item.exception_flow,
                     source_reference=item.source_reference,
+                    components=[component.model_dump() for component in (item.components or [])],
+                    error_messages=[message.model_dump() for message in (item.error_messages or [])],
                     status="ai_generated",
                     version=1,
                     updated_at=datetime.now(),
                 )
-                for item in result.requirements
+                for item in result_items
             ]
 
             saved_requirements = repository.create_many(requirements)
@@ -219,7 +262,7 @@ async def generate_requirements_from_document(document_id: str) -> GenerateRequi
             document_id=str(document_uuid),
             project_id=str(project_id) if project_id else None,
             total_requirements=len(saved_requirements),
-            requirements=[_requirement_to_response(r) for r in saved_requirements],
+            requirements=[requirement_to_response(r) for r in saved_requirements],
         )
     except SQLAlchemyError as exc:
         raise RequirementGenerationError("Database save failed") from exc
@@ -276,7 +319,7 @@ def list_requirements_by_document(document_id: str) -> ListRequirementsResponse:
         return ListRequirementsResponse(
             document_id=str(document_uuid),
             total_requirements=len(requirements),
-            requirements=[_requirement_to_response(req) for req in requirements],
+            requirements=[requirement_to_response(req) for req in requirements],
         )
 
 
@@ -328,7 +371,7 @@ def list_requirements_by_project(project_id: str) -> BulkRequirementsResponse:
                 str(document_id): ListRequirementsResponse(
                     document_id=str(document_id),
                     total_requirements=len(reqs),
-                    requirements=[_requirement_to_response(req) for req in reqs],
+                    requirements=[requirement_to_response(req) for req in reqs],
                 )
                 for document_id, reqs in grouped.items()
             }
