@@ -3,6 +3,22 @@ import { Search, X } from "lucide-react";
 /* ══════════════════════════════════════════════════════════════
    Types
    ══════════════════════════════════════════════════════════════ */
+
+// Một ô trong ma trận chạy thử Environment × Lần chạy của 1 test case (Tester Studio).
+// Tester tự thêm environment (VD "Desktop-Chrome") và lần chạy khi cần — không có danh sách cố định.
+// CHỈ chứa kết quả Pass/Fail/Blocked của lần chạy đó — actual_result/bug_reference/note dùng
+// chung cho cả test case, xem StudioTestCaseItem (đúng cấu trúc file mẫu: 1 cột Mã lỗi/Ghi chú
+// cho cả dòng, không lặp lại theo từng ô).
+export type TestExecutionItem = {
+  id: string;
+  test_case_id: string;
+  environment: string;
+  run_number: number;
+  result: string; // Untested | Pass | Fail | Blocked
+  executed_by?: string | null;
+  executed_at?: string | null;
+};
+
 export type StudioTestCaseItem = {
   id: string;
   requirement_id?: string;
@@ -22,11 +38,13 @@ export type StudioTestCaseItem = {
   execution_status?: string;
   status: string;
   note?: string;
+  bug_reference?: string | null;
   version?: number;
   feature_name?: string;
   requirement_title?: string;
   project_id?: string;
   module_name?: string;
+  executions?: TestExecutionItem[];
 };
 
 export type StudioView = "projects" | "documents" | "testcases";
@@ -156,6 +174,17 @@ export function SeverityBadge({ severity }: { severity: string }) {
       {severity}
     </span>
   );
+}
+
+// Màu theo trạng thái chạy thử (Pass/Fail/Blocked/Untested) — dùng chung cho cột Execution
+// tổng và từng ô trong ma trận Environment × Lần chạy.
+export function executionResultColor(result?: string): string {
+  switch (result) {
+    case "Pass": return "var(--success)";
+    case "Fail": return "var(--danger)";
+    case "Blocked": return "var(--warning)";
+    default: return "var(--text-muted)";
+  }
 }
 
 export function ColumnSearchInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {

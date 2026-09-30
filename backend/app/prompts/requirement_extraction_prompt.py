@@ -16,6 +16,11 @@ Each requirement must include these main output fields:
 - workflow
 - state
 - error_handling
+- inputs
+- outputs
+- business_rules
+- preconditions
+- exception_flows
 - clarifying_questions
 - goal
 - trigger
@@ -47,11 +52,32 @@ Rules:
 - Put the event or condition that starts the use case into trigger.
 - Put fields, controls, request/response values, and other inputs or outputs into components. For each component, return name, data_type, direction, initial_value, and description. Use null for details not present in the source.
 - Put source-defined errors into error_messages. Each entry contains type, situation, exact message, and notes. If the source does not provide the exact displayed message, keep message null and ask a targeted clarifying question.
+- Put named business/domain rules that are not simple field validation (e.g. "a non-unique field
+  may be duplicated across records", "soft-deleted records are excluded from listings", "child
+  records are not cascade-deleted") into business_rules.
+- Put the setup conditions that must hold before the use case starts (login state, role, prior
+  navigation, data that must already exist) into preconditions.
+- Put alternative/error branches from the main flow (e.g. steps labeled "5A", "7A" in the source,
+  or "if X fails then Y") into exception_flows, each as "<trigger> -> <system behavior>".
 - validation_rule should include required fields, allowed values, formats, duplicate checks, boundaries, and cross-field rules when present.
 - permission should include roles, allowed actions, restricted actions, and ownership/scope rules when present.
 - workflow should contain 3 to 8 concrete ordered steps when the source text describes a process.
 - state should include initial state, target state, status values, state transitions, and persistence/history behavior when present.
 - error_handling should include validation errors, permission errors, missing data, duplicate data, system failures, timeout, unsupported file/type/format, and recovery behavior when present.
+  When the source text gives an explicit error code / message table, copy each message VERBATIM
+  (do not paraphrase) and keep it paired with its trigger condition, e.g. "Project Code already
+  exists -> 'Project existed' (HTTP 400)" — test case generation later quotes these verbatim.
+- inputs should list EVERY input UI field/control found in the document as its own entry, each
+  entry packing all stated attributes in one string: field name, control type (Textbox/Combobox/
+  Selectbox/Textarea/Checkbox/File upload/...), required or optional, max length / format /
+  allowed values, default value, and any stated behavior (auto-trim whitespace, autofocus, search-
+  as-you-type, read-only, drag-and-drop). Example: "Project Name: Textbox, required, max 100
+  chars, auto-trims leading/trailing spaces, autofocus on dialog open". Do NOT collapse multiple
+  fields into one summarized sentence — one field = one list entry, in the order they appear.
+- outputs should list EVERY output/display field or component the same way: name, where it is
+  shown, source/mapping if stated (e.g. "maps to project.status: 1=Active, 0=Inactive"), and
+  behavior for missing/null data if stated (e.g. shows "—" placeholder). Include list/table
+  columns, action buttons per row, and read-only detail fields as separate entries.
 - If a category has no support in the source text, return [] for that category instead of guessing.
 - Prefer highly detailed and complete extraction over brevity. Every field in the JSON should be as exhaustive as possible.
 - source_reference must name the exact `[SOURCE SECTION: ...]` marker that supports the requirement when markers are present. Never cite a section that does not support the requirement.
@@ -84,6 +110,11 @@ Required JSON schema:
       "workflow": ["string"],
       "state": ["string"],
       "error_handling": ["string"],
+      "inputs": ["string"],
+      "outputs": ["string"],
+      "business_rules": ["string"],
+      "preconditions": ["string"],
+      "exception_flows": ["string"],
       "clarifying_questions": ["string"],
       "module_name": "string or null",
       "feature_name": "string or null",

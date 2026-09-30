@@ -101,6 +101,7 @@ def _ensure_test_case_columns() -> None:
         "ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS execution_status TEXT NOT NULL DEFAULT 'Untested'",
         "ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS bug_reference TEXT",
     ]
     # Fix legacy columns whose types differ from our model
     fix_type_statements = [
