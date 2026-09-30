@@ -1,6 +1,27 @@
 stages:
+  - test
   - build
   - deploy
+
+test-backend:
+  stage: test
+  tags:
+    - local
+  script:
+    - docker build -t tcga-backend-test:$env:CI_COMMIT_SHORT_SHA -f backend/Dockerfile.prod backend
+    - docker run --rm tcga-backend-test:$env:CI_COMMIT_SHORT_SHA python -m compileall -q app
+    - docker run --rm tcga-backend-test:$env:CI_COMMIT_SHORT_SHA python -m unittest test_requirement_coverage test_requirement_schema -v
+
+test-frontend:
+  stage: test
+  tags:
+    - local
+  script:
+    - Set-Location frontend
+    - npm ci
+    - npm run typecheck
+    - npm run test
+    - npm run build
 
 build-backend:
   stage: build
@@ -28,5 +49,7 @@ deploy:
     - $env:KUBECONFIG = "C:\Users\Admin\.kube\config"
     - kubectl set image deployment/backend backend=tcga-backend:$env:CI_COMMIT_SHORT_SHA -n tcga
     - kubectl set image deployment/frontend frontend=tcga-frontend:$env:CI_COMMIT_SHORT_SHA -n tcga
+    - kubectl rollout status deployment/backend -n tcga --timeout=180s
+    - kubectl rollout status deployment/frontend -n tcga --timeout=180s
   only:
     - main

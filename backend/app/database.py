@@ -31,7 +31,14 @@ engine = None
 SessionLocal = None
 
 if DATABASE_URL not in PLACEHOLDER_VALUES:
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    # SQLAlchemy 2.1 đổi driver mặc định của "postgresql://" sang psycopg (v3), còn project
+    # chỉ cài psycopg2-binary → chỉ định rõ driver để chạy được với cả 2.0 lẫn 2.1.
+    engine_url = DATABASE_URL
+    if engine_url.startswith("postgresql://"):
+        engine_url = "postgresql+psycopg2://" + engine_url[len("postgresql://"):]
+    elif engine_url.startswith("postgres://"):
+        engine_url = "postgresql+psycopg2://" + engine_url[len("postgres://"):]
+    engine = create_engine(engine_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -149,6 +156,8 @@ def _ensure_requirement_columns() -> None:
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS module_name TEXT",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS feature_name TEXT",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS actor TEXT",
+        "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS goal TEXT",
+        "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS trigger TEXT",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS business_rules JSON",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS inputs JSON",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS outputs JSON",
@@ -156,6 +165,8 @@ def _ensure_requirement_columns() -> None:
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS validation_rules JSON",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS exception_flows JSON",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS source_reference TEXT",
+        "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS components JSON",
+        "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS error_messages JSON",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS confidence_score DOUBLE PRECISION",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS created_by UUID",
@@ -172,6 +183,7 @@ def _ensure_requirement_hitl_columns() -> None:
     statements = [
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS clarifying_questions JSON",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS user_answers JSON",
+        "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS user_context TEXT",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS test_case_status TEXT",
         "ALTER TABLE requirements ADD COLUMN IF NOT EXISTS test_case_error TEXT",
     ]

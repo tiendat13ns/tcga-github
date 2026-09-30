@@ -1,4 +1,9 @@
-from app.models import Requirement
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models import Requirement
 
 SYSTEM_PROMPT = """You are a senior QA Engineer and Test Case Designer.
 
@@ -125,6 +130,12 @@ def build_user_prompt(
     if requirement.actor:
         sections.append(f"Actor: {requirement.actor}")
 
+    if requirement.goal:
+        sections.append(f"Business Goal: {requirement.goal}")
+
+    if requirement.trigger:
+        sections.append(f"Trigger: {requirement.trigger}")
+
     if requirement.module_name:
         sections.append(f"Module: {requirement.module_name}")
 
@@ -161,6 +172,41 @@ def build_user_prompt(
     if requirement.exception_flows:
         sections.append(f"Exception Flows:\n{_join_list(requirement.exception_flows)}")
 
+    if requirement.components:
+        sections.append(
+            "Components (structured input/output definitions):\n"
+            + _join_list([
+                ", ".join(
+                    f"{key}={value}"
+                    for key, value in component.items()
+                    if value is not None
+                )
+                for component in requirement.components
+            ])
+        )
+
+    if requirement.error_messages:
+        sections.append(
+            "Error Messages (source-confirmed):\n"
+            + _join_list([
+                ", ".join(
+                    f"{key}={value}"
+                    for key, value in error_message.items()
+                    if value is not None
+                )
+                for error_message in requirement.error_messages
+            ])
+        )
+
+    user_context = getattr(requirement, "user_context", None)
+    if user_context:
+        sections.append(
+            "[USER-CONFIRMED CONTEXT]\n"
+            "The BA/QA user supplied the following correction or scope clarification. "
+            "Treat it as confirmed context, while keeping it distinct from AI-extracted source content:\n\n"
+            + user_context
+        )
+
     if document_context:
         sections.append(
             f"[DOCUMENT CONTEXT]\n"
@@ -186,12 +232,13 @@ def build_user_prompt(
             + "\n\n".join(qa_lines)
         )
     elif questions:
-        # Questions exist but not answered yet — still show as hints
+        # Keep unresolved gaps visible without turning them into invented business rules.
         hints = "\n".join(f"  - {q}" for q in questions)
         sections.append(
-            "[UNRESOLVED QUESTIONS — use as hints for boundary/negative cases]\n"
-            "The following edge cases were identified as unclear in the document.\n"
-            "Use them as inspiration for negative and boundary test cases:\n\n"
+            "[UNRESOLVED QUESTIONS — DO NOT ASSUME ANSWERS]\n"
+            "The following details are not confirmed by the source or the BA/QA user. Do not invent\n"
+            "values, messages, limits, or expected behavior for them. Generate only test cases that\n"
+            "remain valid without assuming an answer:\n\n"
             + hints
         )
 

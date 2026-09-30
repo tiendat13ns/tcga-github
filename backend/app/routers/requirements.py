@@ -1,7 +1,6 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user, get_db
@@ -11,6 +10,7 @@ from app.schemas.requirement_schema import (
     BulkRequirementsResponse,
     GenerationStartedResponse,
     ListRequirementsResponse,
+    RequirementInputUpdateRequest,
     RequirementResponse,
     RequirementStatusListResponse,
 )
@@ -22,14 +22,11 @@ from app.services.generation.requirement_generation_service import (
     list_requirements_by_document,
     list_requirements_by_project,
     run_requirement_generation_job,
+    requirement_to_response,
     set_document_requirement_status,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["requirements"])
-
-
-class SubmitAnswersRequest(BaseModel):
-    answers: list[str]
 
 
 def _verify_document_owner(db: Session, document_id: str, user: User) -> Document:
@@ -141,38 +138,17 @@ def get_project_requirements(
 @router.patch("/requirements/{requirement_id}/answers", response_model=RequirementResponse)
 def submit_requirement_answers(
     requirement_id: str,
-    body: SubmitAnswersRequest,
+    body: RequirementInputUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """User submits answers to the AI's clarifying questions for a requirement."""
+    """Update clarifying answers and/or the BA/QA user's confirmed context."""
     req = verify_requirement_owner(db, requirement_id, current_user)
-    req.user_answers = body.answers
+    if "answers" in body.model_fields_set:
+        req.user_answers = body.answers
+    if "user_context" in body.model_fields_set:
+        req.user_context = body.user_context
     db.commit()
     db.refresh(req)
 
-    return RequirementResponse(
-        id=str(req.id),
-        title=req.title,
-        description=req.description,
-        functional_requirement=req.functional_requirement,
-        validation_rule=req.validation_rule,
-        permission=req.permission,
-        workflow=req.workflow,
-        state=req.state,
-        error_handling=req.error_handling,
-        module_name=req.module_name,
-        feature_name=req.feature_name,
-        actor=req.actor,
-        business_rules=req.business_rules,
-        inputs=req.inputs,
-        outputs=req.outputs,
-        preconditions=req.preconditions,
-        validation_rules=req.validation_rules,
-        exception_flows=req.exception_flows,
-        source_reference=req.source_reference,
-        status=req.status,
-        version=req.version,
-        clarifying_questions=req.clarifying_questions,
-        user_answers=req.user_answers,
-    )
+    return requirement_to_response(req)

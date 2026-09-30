@@ -1086,6 +1086,145 @@ input:-webkit-autofill:active {
   color: var(--text-muted);
 }
 
+.req-section-group,
+.req-user-context-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.req-general-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.req-general-grid > div {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-elevated);
+}
+
+.req-general-grid span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.req-general-grid strong {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.req-structured-table {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.req-structured-row {
+  display: grid;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.req-structured-row:last-child {
+  border-bottom: 0;
+}
+
+.req-components-table .req-structured-row {
+  grid-template-columns: 1.1fr 0.8fr 0.9fr 1fr 1.8fr;
+}
+
+.req-errors-table .req-structured-row {
+  grid-template-columns: 0.8fr 1.5fr 1.5fr 1.2fr;
+}
+
+.req-structured-row > span {
+  min-width: 0;
+  padding: 8px 9px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.req-structured-header {
+  background: var(--bg-hover);
+}
+
+.req-structured-header > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.req-user-context-panel {
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.req-context-count {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.req-context-count.is-error {
+  color: var(--danger);
+}
+
+.req-input-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 700px) {
+  .req-general-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .req-structured-header {
+    display: none;
+  }
+
+  .req-components-table .req-structured-row,
+  .req-errors-table .req-structured-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 9px;
+  }
+
+  .req-structured-row > span {
+    display: grid;
+    grid-template-columns: minmax(90px, 0.45fr) 1fr;
+    gap: 8px;
+    padding: 0;
+  }
+
+  .req-structured-row > span::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
 /* ── Test Cases ──────────────────────────────────────────── */
 .tc-panel {
   border: 1px solid var(--border-soft);

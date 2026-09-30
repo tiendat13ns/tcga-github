@@ -1,14 +1,14 @@
-# Sử dụng Node.js 20 phiên bản alpine (rất nhẹ)
-FROM node:20-alpine
+# Node.js 22 alpine — Vitest 5 / jsdom 30 yêu cầu Node >= 22
+FROM node:22-alpine
 
 # Đặt thư mục làm việc bên trong container
 WORKDIR /app
 
-# Copy package.json trước để tận dụng cache của Docker
-COPY package.json ./
+# Copy package.json + lockfile trước để tận dụng cache của Docker
+COPY package.json package-lock.json ./
 
-# Cài đặt tất cả các thư viện npm
-RUN npm install
+# Cài đúng phiên bản trong lockfile (không resolve lại "latest")
+RUN npm ci
 
 # Copy toàn bộ source code vào container
 COPY . .

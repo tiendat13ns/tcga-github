@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { LogOut, Zap, ShieldCheck, ChevronRight, Settings, MessageCircleMore } from "lucide-react";
 import { TCGAAppIcon } from "./TCGALogo";
@@ -169,6 +169,29 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
     if (rect) setToggleTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 12 });
   };
 
+  const handleToggleSidebar = () => {
+    setToggleTooltipPos(null);
+    onToggleSidebar();
+  };
+
+  useEffect(() => {
+    setToggleTooltipPos(null);
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (!toggleTooltipPos) return;
+    const clearTooltip = () => setToggleTooltipPos(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") clearTooltip();
+    };
+    window.addEventListener("keydown", handleEscape);
+    window.addEventListener("blur", clearTooltip);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("blur", clearTooltip);
+    };
+  }, [toggleTooltipPos]);
+
   return (
     <aside className="global-sidebar project-sidebar" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
       <div className="sidebar-header" style={{ justifyContent: isSidebarOpen ? "space-between" : "center", gap: "10px", padding: isSidebarOpen ? "24px 20px" : "24px 0", alignItems: "center" }}>
@@ -188,7 +211,7 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
                 </span>
               </div>
             </button>
-            <button type="button" className="icon-btn-ghost" onClick={onToggleSidebar} title="Close sidebar" style={{ flexShrink: 0 }}>
+            <button type="button" className="icon-btn-ghost" onClick={handleToggleSidebar} title="Close sidebar" style={{ flexShrink: 0 }}>
               <PanelLeftCloseIcon />
             </button>
           </>
@@ -197,9 +220,11 @@ export default function GlobalSidebar({ activeView, selectedProject, onNavigate,
             ref={toggleBtnRef}
             type="button"
             className="icon-btn-ghost"
-            onClick={onToggleSidebar}
+            onClick={handleToggleSidebar}
             onMouseEnter={showToggleTooltip}
             onMouseLeave={() => setToggleTooltipPos(null)}
+            onBlur={() => setToggleTooltipPos(null)}
+            aria-label="Open sidebar"
           >
             <MenuIcon />
             {toggleTooltipPos && <FloatingTooltip pos={toggleTooltipPos} label="Open sidebar" />}

@@ -190,7 +190,7 @@ async def _build_fast_path_system_content(request: ChatRequest, use_rag: bool) -
     stream_chat_message() (SSE) để tránh lặp logic RAG + chọn prompt ở 2 nơi.
 
     Nếu câu hỏi là yêu cầu "phân tích tổng quan" (xem _is_overview_analysis_request), lấy
-    RAG sâu hơn (top-12 thay vì top-3, giống mức Requirement extraction) và thêm
+    RAG sâu hơn (top-12 thay vì top-3) để bao quát câu hỏi tổng quan và thêm
     OVERVIEW_ANALYSIS_INSTRUCTION để output có cấu trúc cố định thay vì tuỳ hứng mỗi lần.
     """
     is_overview = _is_overview_analysis_request(request.message)

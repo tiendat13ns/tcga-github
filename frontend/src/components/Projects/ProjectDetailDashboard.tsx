@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderGit2 } from "lucide-react";
 import { Project } from "./ProjectManager";
 import DocumentUpload from "../Documents/DocumentUpload";
 import DocumentList from "../Documents/DocumentList";
-import RequirementViewer, { GenerateRequirementsResponse } from "../RequirementViewer";
+import RequirementViewer, {
+  createRequirementViewerUiState,
+  GenerateRequirementsResponse,
+  RequirementViewerUiState,
+} from "../RequirementViewer";
 import SideDrawer from "../SideDrawer";
 import ChatWorkspace from "../ChatWorkspace";
 import DocumentContextSidebar from "../Documents/DocumentContextSidebar";
@@ -15,30 +20,73 @@ type ProjectDetailDashboardProps = {
   project: Project;
 };
 
+type ActiveRequirementData = {
+  reqs: GenerateRequirementsResponse;
+  doc: DocumentItem | null;
+};
+
+type ProjectWorkspaceUiState = {
+  activeTab: "dashboard" | "agent";
+  selectedDocumentIds: string[];
+  activeRequirementData: ActiveRequirementData | null;
+  requirementViewerStateByDocument: Record<string, RequirementViewerUiState>;
+};
+
+function createProjectWorkspaceUiState(): ProjectWorkspaceUiState {
+  return {
+    activeTab: "dashboard",
+    selectedDocumentIds: [],
+    activeRequirementData: null,
+    requirementViewerStateByDocument: {},
+  };
+}
+
 export default function ProjectDetailDashboard({ project }: ProjectDetailDashboardProps) {
   const [newUploadedDocuments, setNewUploadedDocuments] = useState<DocumentItem[]>([]);
+  const queryClient = useQueryClient();
+  const workspaceUiKey = useMemo(() => ["project-workspace-ui", project.id] as const, [project.id]);
+  const { data: workspaceUi = createProjectWorkspaceUiState() } = useQuery<ProjectWorkspaceUiState>({
+    queryKey: workspaceUiKey,
+    queryFn: async () => createProjectWorkspaceUiState(),
+    enabled: false,
+    initialData: createProjectWorkspaceUiState,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  const updateWorkspaceUi = useCallback((
+    updater: (current: ProjectWorkspaceUiState) => ProjectWorkspaceUiState,
+  ) => {
+    queryClient.setQueryData<ProjectWorkspaceUiState>(
+      workspaceUiKey,
+      (current) => updater(current ?? createProjectWorkspaceUiState()),
+    );
+  }, [queryClient, workspaceUiKey]);
   // Lịch sử chat lưu ở DB (thay cho localStorage trước đây) — đồng bộ được giữa các
   // thiết bị/trình duyệt, không mất khi đăng xuất hoặc xóa cache.
   const { data: chatMessages, isLoading: isChatHistoryLoading } = useChatHistory(project.id);
   const syncChatCache = useSyncChatHistoryCache(project.id);
   const clearChatHistory = useClearChatHistory(project.id);
 
-  // State for toggling views
-  const [activeTab, setActiveTab] = useState<"dashboard" | "agent">("dashboard");
-  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
-
-  const [activeRequirementData, setActiveRequirementData] = useState<{
-    reqs: GenerateRequirementsResponse;
-    doc: DocumentItem | null;
-  } | null>(null);
+  const { activeTab, selectedDocumentIds, activeRequirementData } = workspaceUi;
+  const setActiveTab = (value: "dashboard" | "agent") => {
+    updateWorkspaceUi((current) => ({ ...current, activeTab: value }));
+  };
+  const setSelectedDocumentIds = (documentIds: string[]) => {
+    updateWorkspaceUi((current) => ({ ...current, selectedDocumentIds: documentIds }));
+  };
 
   const handleViewRequirements = (reqs: GenerateRequirementsResponse, doc: DocumentItem) => {
-    setActiveRequirementData({ reqs, doc });
+    updateWorkspaceUi((current) => ({ ...current, activeRequirementData: { reqs, doc } }));
   };
 
   const handleCloseRequirements = () => {
-    setActiveRequirementData(null);
+    updateWorkspaceUi((current) => ({ ...current, activeRequirementData: null }));
   };
+
+  const activeDocumentId = activeRequirementData?.reqs.document_id ?? null;
+  const activeRequirementViewerState = activeDocumentId
+    ? workspaceUi.requirementViewerStateByDocument[activeDocumentId] ?? createRequirementViewerUiState()
+    : createRequirementViewerUiState();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", overflow: "hidden" }}>
@@ -148,7 +196,23 @@ export default function ProjectDetailDashboard({ project }: ProjectDetailDashboa
             requirements={activeRequirementData.reqs}
             document={activeRequirementData.doc}
             onClose={handleCloseRequirements}
-            onRequirementsUpdate={(updatedReqs) => setActiveRequirementData(prev => prev ? { ...prev, reqs: updatedReqs } : null)}
+            onRequirementsUpdate={(updatedReqs) => updateWorkspaceUi((current) => ({
+              ...current,
+              activeRequirementData: current.activeRequirementData
+                ? { ...current.activeRequirementData, reqs: updatedReqs }
+                : null,
+            }))}
+            uiState={activeRequirementViewerState}
+            onUiStateChange={(state) => {
+              if (!activeDocumentId) return;
+              updateWorkspaceUi((current) => ({
+                ...current,
+                requirementViewerStateByDocument: {
+                  ...current.requirementViewerStateByDocument,
+                  [activeDocumentId]: state,
+                },
+              }));
+            }}
           />
         )}
       </SideDrawer>

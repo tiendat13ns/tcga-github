@@ -150,6 +150,8 @@ class Requirement(Base):
     module_name = Column(Text, nullable=True)
     feature_name = Column(Text, nullable=True)
     actor = Column(Text, nullable=True)
+    goal = Column(Text, nullable=True)
+    trigger = Column(Text, nullable=True)
     business_rules = Column(JSON, nullable=True)
     inputs = Column(JSON, nullable=True)
     outputs = Column(JSON, nullable=True)
@@ -157,6 +159,8 @@ class Requirement(Base):
     validation_rules = Column(JSON, nullable=True)
     exception_flows = Column(JSON, nullable=True)
     source_reference = Column(Text, nullable=True)
+    components = Column(JSON, nullable=True)
+    error_messages = Column(JSON, nullable=True)
     confidence_score = Column(Float, nullable=True)
     status = Column(Text, nullable=False, default="ai_generated")
     version = Column(Integer, nullable=False, default=1)
@@ -166,6 +170,7 @@ class Requirement(Base):
     # Human-in-the-Loop Q&A columns
     clarifying_questions = Column(JSON, nullable=True)   # list[str]: questions AI raised
     user_answers = Column(JSON, nullable=True)            # list[str]: QA/BA answers
+    user_context = Column(Text, nullable=True)             # free-form context confirmed by BA/QA
     # Trạng thái sinh Test Case chạy nền cho requirement này: None = chưa/không chạy,
     # "generating" = đang gọi LLM nền, "failed" = lỗi (xem test_case_error). "Đã xong" suy ra
     # từ việc test case đã tồn tại cho requirement.

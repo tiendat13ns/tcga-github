@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { formatAgentMessage } from "../utils/formatAgentMessage";
 import { TCGAAppIcon } from "./TCGALogo";
 import ConfirmDialog from "./ConfirmDialog";
+import { getChatGreeting } from "../utils/chatGreeting";
 
 export type Message = {
   id: string;
@@ -35,11 +36,7 @@ const TrashIcon = () => (
 
 export default function ChatWorkspace({ projectId, selectedDocumentIds, initialMessages = [], onMessagesChange, onClearHistory }: ChatWorkspaceProps) {
   const { token, refreshUser } = useAuth();
-  const [messages, setMessages] = useState<Message[]>(
-    initialMessages.length > 0 ? initialMessages : [
-      { id: "1", role: "ai", content: "Xin chào! Bạn đã chọn tài liệu, hãy đặt câu hỏi hoặc yêu cầu phân tích." },
-    ]
-  );
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -61,6 +58,9 @@ export default function ChatWorkspace({ projectId, selectedDocumentIds, initialM
   // trên thanh điều hướng, giúp biết mình đang ở đoạn nào của cuộc hội thoại.
   const [activeUserMessageId, setActiveUserMessageId] = useState<string | null>(null);
   const userMessages = messages.filter((m) => m.role === "user");
+  const visibleMessages = messages.length > 0
+    ? messages
+    : [getChatGreeting(selectedDocumentIds.length > 0)];
 
   const scrollToMessage = (id: string) => {
     userMessageRefs.current.get(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -120,9 +120,7 @@ export default function ChatWorkspace({ projectId, selectedDocumentIds, initialM
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const confirmClearChat = () => {
-    setMessages([
-      { id: Date.now().toString(), role: "ai", content: "Xin chào! Lịch sử đã được làm mới. Hãy đặt câu hỏi hoặc yêu cầu phân tích." },
-    ]);
+    setMessages([]);
     onClearHistory?.();
   };
 
@@ -278,10 +276,10 @@ export default function ChatWorkspace({ projectId, selectedDocumentIds, initialM
       <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex" }}>
       <div className="chat-history-scroll" ref={chatScrollRef} onScroll={updateActiveUserMessage}>
       <div className="chat-history-inner">
-        {messages.map((msg, idx) => {
+        {visibleMessages.map((msg, idx) => {
           // Gộp avatar + nhãn "TCGA" cho các tin nhắn AI liên tiếp — chỉ hiện ở tin đầu
           // tiên của cụm, tránh lặp lại avatar/nhãn cho từng message riêng lẻ.
-          const isFirstOfGroup = idx === 0 || messages[idx - 1].role !== msg.role;
+          const isFirstOfGroup = idx === 0 || visibleMessages[idx - 1].role !== msg.role;
           return (
           <div
             key={msg.id}
@@ -356,7 +354,7 @@ export default function ChatWorkspace({ projectId, selectedDocumentIds, initialM
                     {msg.error && (
                       <button
                         onClick={() => {
-                          const prevMsg = messages[idx - 1];
+                          const prevMsg = visibleMessages[idx - 1];
                           if (prevMsg?.role === "user") sendMessage(prevMsg.content);
                         }}
                         disabled={isLoading}
@@ -376,7 +374,7 @@ export default function ChatWorkspace({ projectId, selectedDocumentIds, initialM
           );
         })}
 
-        {messages.length === 1 && selectedDocumentIds.length > 0 && (
+        {messages.length === 0 && selectedDocumentIds.length > 0 && (
           <div style={{ display: "flex", gap: "8px" }}>
             <div style={{ width: "28px", flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>

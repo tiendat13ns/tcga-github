@@ -11,9 +11,12 @@ frontend/*.log
 frontend/*.tsbuildinfo
 .agents/
 skills-lock.json
-SRS_AI_Test_Case_Generation_Assistant.md
 .vscode/
 CREDIT_SYSTEM.md
 .claude/
 k8s/COMMANDS.md
 
+
+# Tài liệu feedback nội bộ — không đưa lên remote
+Feedback TCGA.docx
+TASKS_FEEDBACK_TCGA.md

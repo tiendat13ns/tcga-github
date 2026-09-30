@@ -4,10 +4,6 @@ import { apiFetch } from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
-const DEFAULT_GREETING: Message[] = [
-  { id: "1", role: "ai", content: "Xin chào! Bạn đã chọn tài liệu, hãy đặt câu hỏi hoặc yêu cầu phân tích." },
-];
-
 export const chatHistoryKeys = {
   byProject: (projectId: string) => ["chat-history", projectId] as const,
 };
@@ -18,7 +14,6 @@ async function fetchChatHistory(projectId: string): Promise<Message[]> {
   const r = await apiFetch(`${API_BASE}/api/chat/history?project_id=${projectId}`);
   if (!r.ok) throw new Error("Không tải được lịch sử chat");
   const data: { messages: ChatHistoryApiMessage[] } = await r.json();
-  if (data.messages.length === 0) return DEFAULT_GREETING;
   return data.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, error: m.error || undefined }));
 }
 
@@ -49,14 +44,15 @@ export function useSyncChatHistoryCache(projectId: string | null) {
   };
 }
 
-/** Xóa lịch sử chat đã lưu ở DB + reset cache cục bộ về lời chào mặc định. */
+/** Xóa lịch sử chat đã lưu ở DB + reset cache cục bộ về rỗng.
+ * Lời chào là trạng thái UI do ChatWorkspace tạo theo tài liệu đang chọn, không lưu vào lịch sử. */
 export function useClearChatHistory(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => deleteChatHistoryAPI(projectId as string),
     onSuccess: () => {
       if (!projectId) return;
-      queryClient.setQueryData(chatHistoryKeys.byProject(projectId), DEFAULT_GREETING);
+      queryClient.setQueryData(chatHistoryKeys.byProject(projectId), []);
     },
   });
 }
